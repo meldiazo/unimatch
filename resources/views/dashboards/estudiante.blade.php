@@ -56,10 +56,10 @@
               </a>
             </li>
             <li class="nav-item">
-              <span class="nav-link disabled">
+              <a href="#balance-card" class="nav-link">
                 <i class="nav-icon fas fa-wallet"></i>
-                <p>Saldos a favor (próximamente)</p>
-              </span>
+                <p>Saldos a favor</p>
+              </a>
             </li>
           </ul>
         </nav>
@@ -88,6 +88,54 @@
               </button>
             </div>
           @endif
+
+          <div class="card card-outline card-brand mb-4" id="balance-card">
+          <div class="card-header bg-gradient-info">
+            <h3 class="card-title mb-0"><i class="fas fa-wallet mr-2"></i>Saldo a favor</h3>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="info-box bg-light">
+                  <span class="info-box-icon bg-info"><i class="fas fa-money-bill-wave"></i></span>
+                  <div class="info-box-content">
+                    <span class="info-box-text">Saldo disponible</span>
+                    <span class="info-box-number" id="balance-amount">Bs 0.00</span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="info-box bg-light">
+                  <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                  <div class="info-box-content">
+                    <span class="info-box-text">Última actualización</span>
+                    <span class="info-box-number text-sm" id="balance-updated">Cargando...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <hr>
+
+            <h5>Movimientos recientes</h5>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Descripción</th>
+                    <th class="text-right">Monto</th>
+                  </tr>
+                </thead>
+                <tbody id="balance-movements">
+                  <tr>
+                    <td colspan="3" class="text-center text-muted py-3">Cargando movimientos...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
 
           <div class="card card-outline card-brand mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -196,6 +244,7 @@
                     <th>Monto</th>
                     <th>Estado</th>
                     <th>Comprobante</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -208,6 +257,9 @@
                         <span class="badge {{ $voucher->status === 'recibido' ? 'badge-info' : 'badge-success' }}">
                           {{ ucfirst($voucher->status) }}
                         </span>
+                        @if ($voucher->reason)
+                          <small class="d-block text-muted mt-1">{{ $voucher->reason }}</small>
+                        @endif
                       </td>
                       <td>
                         @if ($voucher->document_url)
@@ -216,10 +268,50 @@
                           <span class="text-muted">Sin archivo</span>
                         @endif
                       </td>
+                      <td>
+                        @if ($voucher->status === 'rechazado')
+                          <button type="button" class="btn btn-warning btn-sm" data-toggle="modal" data-target="#replaceModal{{ $voucher->id }}">
+                            <i class="fas fa-redo"></i> Reemplazar
+                          </button>
+                          
+                          <!-- Modal para reemplazar -->
+                          <div class="modal fade" id="replaceModal{{ $voucher->id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                              <div class="modal-content">
+                                <div class="modal-header">
+                                  <h5 class="modal-title">Reemplazar voucher rechazado</h5>
+                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                </div>
+                                <form action="{{ route('student.vouchers.replace', $voucher) }}" method="POST" enctype="multipart/form-data">
+                                  @csrf
+                                  @method('PATCH')
+                                  <div class="modal-body">
+                                    <div class="alert alert-info">
+                                      <strong>Motivo del rechazo:</strong> {{ $voucher->reason ?? 'No especificado' }}
+                                    </div>
+                                    <div class="form-group">
+                                      <label for="file{{ $voucher->id }}">Nuevo comprobante (PDF, JPG, PNG)</label>
+                                      <input type="file" name="voucher_file" id="file{{ $voucher->id }}" class="form-control-file" required>
+                                    </div>
+                                    <div class="form-group">
+                                      <label for="notes{{ $voucher->id }}">Notas (opcional)</label>
+                                      <textarea name="notes" id="notes{{ $voucher->id }}" class="form-control" rows="2" placeholder="Explica qué cambios realizaste..."></textarea>
+                                    </div>
+                                  </div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-brand">Enviar nuevo comprobante</button>
+                                  </div>
+                                </form>
+                              </div>
+                            </div>
+                          </div>
+                        @endif
+                      </td>
                     </tr>
                   @empty
                     <tr>
-                      <td colspan="5" class="text-center text-muted py-4">
+                      <td colspan="6" class="text-center text-muted py-4">
                         Aún no registraste vouchers.
                       </td>
                     </tr>
@@ -235,3 +327,47 @@
     <aside class="control-sidebar control-sidebar-dark"></aside>
   </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const response = await fetch('/api/student/balance', {
+          headers: { 'Accept': 'application/json' },
+        });
+        const data = await response.json();
+
+        document.getElementById('balance-amount').textContent = 
+          `Bs ${parseFloat(data.balance).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+        document.getElementById('balance-updated').textContent = data.updated_at;
+
+        const tbody = document.getElementById('balance-movements');
+        tbody.innerHTML = '';
+
+        if (data.movements.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Sin movimientos.</td></tr>';
+          return;
+        }
+
+        data.movements.forEach(mov => {
+          const row = document.createElement('tr');
+          const amountClass = mov.type === 'credit' ? 'text-success' : 'text-danger';
+          const sign = mov.type === 'credit' ? '+' : '';
+          
+          row.innerHTML = `
+            <td>${mov.date}</td>
+            <td>${mov.description}</td>
+            <td class="text-right ${amountClass} font-weight-bold">
+              ${sign}Bs ${Math.abs(mov.amount).toFixed(2)}
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (error) {
+        console.error('Error cargando saldo:', error);
+        document.getElementById('balance-movements').innerHTML = 
+          '<tr><td colspan="3" class="alert alert-danger">Error al cargar saldo.</td></tr>';
+      }
+    });
+  </script>
+@endpush

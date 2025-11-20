@@ -123,10 +123,10 @@
                     <th>Acciones</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="cashier-tbody">
                   <tr>
                     <td colspan="7" class="text-center text-muted py-4">
-                      Resultados disponibles una vez que se implemente la integración real.
+                      Usa los filtros para buscar transacciones.
                     </td>
                   </tr>
                 </tbody>
@@ -140,3 +140,86 @@
     <aside class="control-sidebar control-sidebar-dark"></aside>
   </div>
 @endsection
+
+@push('scripts')
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('cashier-search');
+    const bankSelect = document.getElementById('cashier-bank');
+    const statusSelect = document.getElementById('cashier-status');
+    const tbody = document.getElementById('cashier-tbody');
+
+    const performSearch = async () => {
+      const params = new URLSearchParams({
+        query: searchInput.value,
+        bank_id: bankSelect.value || '',
+        status: statusSelect.value || '',
+      });
+
+      try {
+        const response = await fetch(`/api/cashier/transactions/search?${params}`, {
+          headers: { 
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+
+        if (!response.ok) throw new Error('Error en la búsqueda');
+        
+        const data = await response.json();
+        tbody.innerHTML = '';
+
+        if (!data.data || data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No se encontraron resultados.</td></tr>';
+          return;
+        }
+
+        data.data.forEach(tx => {
+          const row = document.createElement('tr');
+          const statusBadge = `badge-${
+            tx.status === 'recibido' ? 'info' : 
+            tx.status === 'validado' ? 'success' : 
+            tx.status === 'rechazado' ? 'danger' : 'warning'
+          }`;
+
+          const billingBadge = `badge-${
+            tx.billing_status === 'facturado' ? 'success' :
+            tx.billing_status === 'pendiente' ? 'warning' : 'secondary'
+          }`;
+
+          row.innerHTML = `
+            <td>${tx.student_name}</td>
+            <td><code>${tx.student_code}</code></td>
+            <td>${tx.bank}</td>
+            <td class="text-right"><strong>Bs ${parseFloat(tx.amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</strong></td>
+            <td><span class="badge ${statusBadge}">${tx.status}</span></td>
+            <td><span class="badge ${billingBadge}">${tx.billing_status}</span></td>
+            <td>
+              ${tx.document_path ? `
+                <div class="btn-group" role="group">
+                  <a href="/storage/${tx.document_path}" target="_blank" class="btn btn-link btn-sm" title="Ver voucher">
+                    <i class="fas fa-file-pdf text-danger"></i> Voucher
+                  </a>
+                  <a href="/cashier/vouchers/${tx.id}/certificate" class="btn btn-link btn-sm" title="Descargar constancia">
+                    <i class="fas fa-download text-primary"></i> Constancia
+                  </a>
+                </div>
+              ` : '<span class="text-muted">—</span>'}
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        tbody.innerHTML = '<tr><td colspan="7" class="alert alert-danger mb-0">Error al buscar. Intenta de nuevo.</td></tr>';
+      }
+    };
+
+    // Ejecutar búsqueda al escribir o cambiar filtros
+    [searchInput, bankSelect, statusSelect].forEach(el => {
+      el.addEventListener('change', performSearch);
+    });
+    searchInput.addEventListener('keyup', performSearch);
+  });
+</script>
+@endpush

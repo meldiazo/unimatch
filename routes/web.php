@@ -13,6 +13,7 @@ use App\Http\Controllers\Income\VoucherController as IncomeVoucherController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\Student\VoucherController as StudentVoucherController;
+use App\Http\Controllers\Cashier\TransactionController as CashierTransactionController;
 use App\Models\Bank;
 use App\Models\PaymentVoucher;
 use App\Models\Student;
@@ -33,6 +34,29 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
         return redirect()->route('dashboard');
     });
 
+    // ========== RUTAS CAJERO ==========
+    Route::middleware(['role:cajero'])->group(function () {
+        Route::get('/api/cashier/transactions/search', [
+            CashierTransactionController::class, 'search'
+        ])->name('api.cashier.transactions.search');
+        
+        Route::get('/cashier/vouchers/{voucher}/certificate', [
+            \App\Http\Controllers\Cashier\VoucherController::class, 'downloadCertificate'
+        ])->name('cashier.vouchers.certificate');
+    });
+
+    // ========== RUTAS ESTUDIANTE ==========
+    Route::middleware(['role:estudiante'])->group(function () {
+        Route::post('/estudiante/vouchers', [StudentVoucherController::class, 'store'])
+            ->name('student.vouchers.store');
+
+        Route::patch('/estudiante/vouchers/{voucher}/replace', [StudentVoucherController::class, 'replace'])
+            ->name('student.vouchers.replace');
+
+        Route::get('/api/student/balance', [\App\Http\Controllers\Student\BalanceController::class, 'show'])
+            ->name('api.student.balance');
+    });
+    
     Route::get('/dashboard', function () {
         $user = auth()->user();
 
@@ -105,6 +129,15 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
 
     Route::post('/estudiante/vouchers', [StudentVoucherController::class, 'store'])
         ->name('student.vouchers.store');
+
+    Route::patch('/estudiante/vouchers/{voucher}/replace', [StudentVoucherController::class, 'replace'])
+        ->name('student.vouchers.replace');
+
+    Route::get('/api/student/balance', [\App\Http\Controllers\Student\BalanceController::class, 'show'])
+        ->name('api.student.balance');
+
+    Route::get('/cashier/vouchers/{voucher}/certificate', [\App\Http\Controllers\Cashier\VoucherController::class, 'downloadCertificate'])
+        ->name('cashier.vouchers.certificate');
 
     Route::group([
         'prefix' => 'admin',
