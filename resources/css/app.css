@@ -13,13 +13,17 @@
 
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--neutral-200);
 }
 
-.login-page {
+.login-page,
+.register-page {
   background: linear-gradient(135deg, rgba(60, 141, 188, 0.95), rgba(54, 127, 169, 0.9));
   min-height: 100vh;
 }
 
+.login-logo a,
+.register-logo a,
 .login-logo .text-brand {
   color: var(--brand-cream);
   font-weight: 700;
@@ -124,6 +128,35 @@ body {
   color: var(--brand-berry);
 }
 
+.small-box {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.small-box.summary-filter {
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.small-box.summary-filter.active-filter {
+  box-shadow: 0 0 0 3px rgba(60, 141, 188, 0.35);
+  transform: translateY(-2px);
+}
+
+.small-box .inner small {
+  display: block;
+  margin-top: 0.35rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.small-box .icon {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.small-box.bg-primary {
+  background: var(--brand-berry) !important;
+}
+
 .info-box-desc {
   display: block;
   font-size: 0.85rem;
@@ -137,18 +170,12 @@ body {
 }
 
 .chart-placeholder {
-  height: 240px;
+  height: 260px;
   border: 1px dashed rgba(60, 141, 188, 0.3);
   border-radius: 12px;
   display: grid;
   place-items: center;
   color: var(--neutral-500);
-  padding: 12px;
-}
-
-.chart-placeholder canvas {
-  width: 100% !important;
-  height: 100% !important;
 }
 
 .empty-state {
@@ -358,8 +385,8 @@ body {
 }
 
 @media (max-width: 768px) {
-  .info-box {
-    min-height: 120px;
+  .small-box {
+    margin-bottom: 1rem;
   }
 }
 

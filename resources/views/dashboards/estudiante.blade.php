@@ -1,0 +1,237 @@
+@extends('layouts.app')
+
+@section('title', 'UniMatch | Portal del Estudiante')
+
+@section('body-class', 'hold-transition sidebar-mini layout-fixed')
+
+@section('content')
+  @php
+      $user = auth()->user();
+      $initials = collect(preg_split('/\s+/', $user->name, -1, PREG_SPLIT_NO_EMPTY))
+          ->map(fn ($part) => mb_substr($part, 0, 1))
+          ->take(2)
+          ->implode('');
+  @endphp
+
+  <div class="wrapper">
+    <nav class="main-header navbar navbar-expand navbar-light navbar-white">
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+        </li>
+        <li class="nav-item d-none d-md-inline-block">
+          <span class="navbar-brand mb-0 h5">Portal de pagos</span>
+        </li>
+      </ul>
+      <ul class="navbar-nav ml-auto">
+        <li class="nav-item ml-2">
+          <form method="POST" action="{{ route('logout') }}">
+            @csrf
+            <button type="submit" class="btn btn-default btn-sm">Cerrar sesión</button>
+          </form>
+        </li>
+      </ul>
+    </nav>
+
+    <aside class="main-sidebar sidebar-dark-brand elevation-4">
+      <a href="#" class="brand-link text-center">
+        <span class="brand-text font-weight-light">UniMatch · Estudiante</span>
+      </a>
+      <div class="sidebar">
+        <div class="user-panel mt-3 pb-3 mb-3 d-flex align-items-center">
+          <div class="image">
+            <span class="avatar-circle">{{ $initials }}</span>
+          </div>
+          <div class="info">
+            <span class="d-block user-name">{{ $user->name }}</span>
+            <span class="text-muted user-role">Estudiante</span>
+          </div>
+        </div>
+        <nav>
+          <ul class="nav nav-pills nav-sidebar flex-column">
+            <li class="nav-item">
+              <a href="#" class="nav-link active">
+                <i class="nav-icon fas fa-receipt"></i>
+                <p>Mis vouchers</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <span class="nav-link disabled">
+                <i class="nav-icon fas fa-wallet"></i>
+                <p>Saldos a favor (próximamente)</p>
+              </span>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </aside>
+
+    <div class="content-wrapper">
+      <section class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6">
+              <h1 class="m-0">Mis pagos y comprobantes</h1>
+              <small class="text-muted">Sube tus vouchers y monitorea su estado.</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="content">
+        <div class="container-fluid">
+          @if (session('status'))
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+              {{ session('status') }}
+              <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+          @endif
+
+          <div class="card card-outline card-brand mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h3 class="card-title mb-0"><i class="fas fa-upload mr-2"></i>Subir nuevo voucher</h3>
+              <span class="badge badge-info">Adjunta PDF o imagen</span>
+            </div>
+            <div class="card-body">
+              @if (! $studentRecord)
+                <div class="alert alert-warning">
+                  No encontramos tu registro en el padrón de estudiantes. Comunícate con ingresos para habilitar tu acceso.
+                </div>
+              @else
+                <form action="{{ route('student.vouchers.store') }}" method="POST" enctype="multipart/form-data">
+                  @csrf
+                  <div class="form-row">
+                    <div class="form-group col-md-6">
+                      <label for="student-code">Código de estudiante</label>
+                      <input
+                        type="text"
+                        name="student_code"
+                        id="student-code"
+                        class="form-control @error('student_code') is-invalid @enderror"
+                        value="{{ old('student_code', $studentRecord->code ?? '') }}"
+                        placeholder="Ej: 20210001"
+                        required
+                      >
+                      @error('student_code')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                    <div class="form-group col-md-6">
+                      <label for="student-bank">Banco (opcional)</label>
+                      <select name="bank_id" id="student-bank" class="form-control @error('bank_id') is-invalid @enderror">
+                        <option value="">Selecciona banco</option>
+                        @foreach ($banks as $bank)
+                          <option value="{{ $bank->id }}" {{ old('bank_id') == $bank->id ? 'selected' : '' }}>{{ $bank->name }}</option>
+                        @endforeach
+                      </select>
+                      @error('bank_id')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                    <div class="form-group col-md-3">
+                      <label for="student-paid-at">Fecha del pago</label>
+                      <input type="date" name="paid_at" id="student-paid-at" class="form-control @error('paid_at') is-invalid @enderror" value="{{ old('paid_at') }}" required>
+                      @error('paid_at')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                    <div class="form-group col-md-3">
+                      <label for="student-amount">Monto (Bs.)</label>
+                      <input type="number" step="0.01" name="amount" id="student-amount" class="form-control @error('amount') is-invalid @enderror" value="{{ old('amount') }}" required>
+                      @error('amount')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group col-md-4">
+                      <label for="student-payment-type">Tipo de pago</label>
+                      <input type="text" name="payment_type" id="student-payment-type" class="form-control @error('payment_type') is-invalid @enderror" value="{{ old('payment_type', 'Transferencia') }}" required>
+                      @error('payment_type')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                    <div class="form-group col-md-4">
+                      <label for="student-operation">N° de operación</label>
+                      <input type="text" name="operation_number" id="student-operation" class="form-control @error('operation_number') is-invalid @enderror" value="{{ old('operation_number') }}" required>
+                      @error('operation_number')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group col-md-4">
+                      <label for="student-account">Cuenta destino (opcional)</label>
+                      <input type="text" name="account_reference" id="student-account" class="form-control @error('account_reference') is-invalid @enderror" value="{{ old('account_reference') }}">
+                      @error('account_reference')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="student-file">Comprobante (.pdf, .jpg, .png)</label>
+                    <input type="file" name="voucher_file" id="student-file" class="form-control-file @error('voucher_file') is-invalid @enderror" required>
+                    @error('voucher_file')
+                      <div class="invalid-feedback d-block">{{ $message }}</div>
+                    @enderror
+                  </div>
+                  <button type="submit" class="btn btn-brand">Enviar voucher</button>
+                </form>
+              @endif
+            </div>
+          </div>
+
+          <div class="card card-outline card-brand">
+            <div class="card-header">
+              <h3 class="card-title mb-0"><i class="fas fa-list mr-2"></i>Historial de vouchers</h3>
+            </div>
+            <div class="card-body p-0 table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Banco</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                    <th>Comprobante</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @forelse ($studentVouchers as $voucher)
+                    <tr>
+                      <td>{{ optional($voucher->paid_at)->format('d/m/Y') ?? '—' }}</td>
+                      <td>{{ $voucher->bank->name ?? '—' }}</td>
+                      <td>Bs {{ number_format($voucher->amount, 2, ',', '.') }}</td>
+                      <td>
+                        <span class="badge {{ $voucher->status === 'recibido' ? 'badge-info' : 'badge-success' }}">
+                          {{ ucfirst($voucher->status) }}
+                        </span>
+                      </td>
+                      <td>
+                        @if ($voucher->document_url)
+                          <a href="{{ $voucher->document_url }}" target="_blank" class="btn btn-link btn-sm"><i class="fas fa-file-alt"></i> Ver</a>
+                        @else
+                          <span class="text-muted">Sin archivo</span>
+                        @endif
+                      </td>
+                    </tr>
+                  @empty
+                    <tr>
+                      <td colspan="5" class="text-center text-muted py-4">
+                        Aún no registraste vouchers.
+                      </td>
+                    </tr>
+                  @endforelse
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="control-sidebar control-sidebar-dark"></aside>
+  </div>
+@endsection
