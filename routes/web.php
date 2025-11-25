@@ -46,7 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
             User::ROLE_ENCARGADO_INGRESOS => (function () {
                 $banks = Bank::with('accounts')->get();
                 $students = Student::orderBy('full_name')->get();
-                $recentVouchers = PaymentVoucher::with('student', 'bank')
+                $recentVouchers = PaymentVoucher::with(['student', 'bankAccount.bank'])
                     ->latest()
                     ->take(10)
                     ->get();
@@ -70,10 +70,10 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
             })(),
             User::ROLE_CAJERO => view('dashboards.cajero'),
             default => view('dashboards.estudiante', [
-                'banks' => Bank::all(),
+                'banks' => Bank::with('accounts')->get(),
                 'studentRecord' => $studentRecord,
                 'studentVouchers' => $studentRecord
-                    ? PaymentVoucher::with('bank')
+                    ? PaymentVoucher::with(['bankAccount.bank'])
                         ->where('student_id', $studentRecord->id)
                         ->latest()
                         ->get()

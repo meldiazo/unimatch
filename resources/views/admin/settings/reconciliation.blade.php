@@ -140,7 +140,10 @@
                   placeholder="Instrucciones para quien sube vouchers"
                   @disabled($readOnly)
                 >{{ trim(old('voucher_template_help', $settings->voucher_template_help)) }}</textarea>
-                <small class="text-muted">Indica columnas obligatorias, formato del archivo y tips de digitalización.</small>
+                <small class="text-muted">
+                  Ej: CSV con encabezados <code>student_code,bank_code,account_number,operation_number,amount,currency,paid_at,status,payment_type</code>
+                  y valores separados por coma sin comillas extra.
+                </small>
                 @error('voucher_template_help')
                   <div class="invalid-feedback">{{ $message }}</div>
                 @enderror

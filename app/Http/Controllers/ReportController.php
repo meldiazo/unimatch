@@ -25,7 +25,7 @@ class ReportController extends Controller
             403
         );
 
-        $query = PaymentVoucher::with(['student', 'bank', 'bankAccount'])
+        $query = PaymentVoucher::with(['student', 'bankAccount.bank'])
             ->latest('paid_at');
 
         $filters = [
@@ -44,7 +44,9 @@ class ReportController extends Controller
         }
 
         if ($filters['bank_id']) {
-            $query->where('bank_id', $filters['bank_id']);
+            $query->whereHas('bankAccount', function ($query) use ($filters) {
+                $query->where('bank_id', $filters['bank_id']);
+            });
         }
 
         if ($filters['billing_status']) {

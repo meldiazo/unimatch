@@ -20,17 +20,17 @@ Se controlará el acceso mediante middleware/guards y políticas por módulo. La
 - **bank_accounts** (`id`, `bank_id`, `account_number`, `currency`, `active`)
 
 ### Captura de datos
-- **bank_statements** (`id`, `bank_id`, `account_id`, `import_batch_id`, `source_name`, `statement_date`, `status`, `meta`)
+- **bank_statements** (`id`, `bank_account_id`, `import_batch_id`, `source_name`, `statement_date`, `status`, `meta`)
 - **bank_statement_lines** (`id`, `statement_id`, `operation_number`, `reference`, `description`, `operation_date`, `value_date`, `amount`, `currency`, `running_balance`, `raw_payload`)
 - **invoice_batches** (`id`, `import_batch_id`, `source_name`, `issued_at`, `status`, `meta`)
 - **invoices** (`id`, `invoice_batch_id`, `invoice_number`, `student_id`, `amount`, `currency`, `issued_at`, `status`, `raw_payload`)
 - **voucher_batches** (`id`, `import_batch_id`, `source_name`, `uploaded_by`, `status`, `meta`)
-- **payment_vouchers** (`id`, `voucher_batch_id`, `student_id`, `bank_id`, `operation_number`, `amount`, `paid_at`, `currency`, `status`, `reason`, `document_path`, `raw_payload`)
+- **payment_vouchers** (`id`, `voucher_batch_id`, `student_id`, `bank_account_id`, `operation_number`, `amount`, `paid_at`, `currency`, `status`, `reason`, `document_path`, `raw_payload`)
 
 `import_batch_id` referencia una tabla común **import_batches** (`id`, `import_type`, `uploaded_by`, `uploaded_at`, `status`, `errors`, `summary_data`).
 
 ### Conciliación y seguimiento
-- **transactions** (`id`, `bank_statement_line_id`, `voucher_id`, `invoice_id`, `student_id`, `status`, `notes`, `matched_at`, `matched_by`, `difference_amount`)
+- **transactions** (`id`, `bank_statement_line_id`, `voucher_id`, `invoice_id`, `status`, `notes`, `matched_at`, `matched_by`, `difference_amount`)
   - `status`: `pending`, `matched`, `no_facturado`, `demasia`, `rechazado`
 - **transaction_logs** (`id`, `transaction_id`, `action`, `old_values`, `new_values`, `performed_by`, `performed_at`)
 

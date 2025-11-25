@@ -52,7 +52,6 @@ class BankStatementImporter
             ]);
 
             $statement = BankStatement::create([
-                'bank_id' => $bank->id,
                 'bank_account_id' => $account->id,
                 'import_batch_id' => $batch->id,
                 'statement_date' => $statementDate,

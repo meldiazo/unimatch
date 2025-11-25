@@ -27,11 +27,25 @@ class Bank extends Model
 
     public function statements()
     {
-        return $this->hasMany(BankStatement::class);
+        return $this->hasManyThrough(
+            BankStatement::class,
+            BankAccount::class,
+            'bank_id',
+            'bank_account_id',
+            'id',
+            'id'
+        );
     }
 
     public function vouchers()
     {
-        return $this->hasMany(PaymentVoucher::class);
+        return $this->hasManyThrough(
+            PaymentVoucher::class,
+            BankAccount::class,
+            'bank_id',
+            'bank_account_id',
+            'id',
+            'id'
+        );
     }
 }

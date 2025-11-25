@@ -92,6 +92,12 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a href="{{ route('admin.settings.reconciliation.edit') }}" class="nav-link {{ $settingsActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-sliders-h"></i>
+                  <p>Parámetros de conciliación</p>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="{{ route('admin.users.index') }}" class="nav-link {{ $usersActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-users-cog"></i>
                   <p>Gestión de usuarios</p>

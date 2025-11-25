@@ -25,7 +25,7 @@ class ExecutiveDashboardBuilder
             })->count(),
         ];
 
-        $alertas = Transaction::with(['line.statement.bank', 'voucher.student'])
+        $alertas = Transaction::with(['line.statement.account.bank', 'voucher.student'])
             ->where(function ($query) {
                 $query->whereNotNull('difference_amount')
                     ->where('difference_amount', '!=', 0);
@@ -38,7 +38,7 @@ class ExecutiveDashboardBuilder
 
                 return [
                     'id' => $transaction->id,
-                    'bank' => $transaction->line?->statement?->bank?->name ?? 'Banco no identificado',
+                    'bank' => $transaction->line?->statement?->account?->bank?->name ?? 'Banco no identificado',
                     'student' => $transaction->voucher?->student?->full_name ?? 'Sin estudiante',
                     'amount' => (float) ($transaction->line?->amount ?? 0),
                     'difference' => $difference,

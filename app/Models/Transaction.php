@@ -12,7 +12,6 @@ class Transaction extends Model
     protected $fillable = [
         'bank_statement_line_id',
         'payment_voucher_id',
-        'student_id',
         'status',
         'notes',
         'matched_by',
@@ -35,9 +34,26 @@ class Transaction extends Model
         return $this->belongsTo(PaymentVoucher::class, 'payment_voucher_id');
     }
 
-    public function student()
+    public function invoice()
     {
-        return $this->belongsTo(Student::class);
+        return $this->belongsTo(Invoice::class, 'invoice_id');
+    }
+
+    public function getStudentAttribute()
+    {
+        if ($this->voucher && $this->voucher->relationLoaded('student')) {
+            return $this->voucher->student;
+        }
+
+        if ($this->voucher && $this->voucher->student) {
+            return $this->voucher->student;
+        }
+
+        if ($this->invoice && $this->invoice->relationLoaded('student')) {
+            return $this->invoice->student;
+        }
+
+        return $this->invoice?->student;
     }
 
     public function matchedBy()

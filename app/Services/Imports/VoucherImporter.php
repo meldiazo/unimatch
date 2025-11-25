@@ -70,25 +70,21 @@ class VoucherImporter
                         ->first();
                 }
 
-                $bank = null;
-                $bankCode = $row[$mapping['bank_code']] ?? null;
-                if ($bankCode) {
-                    $bank = Bank::where('short_code', strtoupper($bankCode))->first();
-                }
-
                 $bankAccount = null;
                 $accountNumber = $row[$mapping['account_number']] ?? null;
-                if ($bank && $accountNumber) {
-                    $bankAccount = BankAccount::where('bank_id', $bank->id)
-                        ->where('account_number', $accountNumber)
-                        ->first();
+                if ($accountNumber) {
+                    $bankAccount = BankAccount::whereHas('bank', function ($query) use ($row, $mapping) {
+                        $bankCode = $row[$mapping['bank_code']] ?? null;
+                        if ($bankCode) {
+                            $query->where('short_code', strtoupper($bankCode));
+                        }
+                    })->where('account_number', $accountNumber)->first();
                 }
 
                 try {
                     PaymentVoucher::create([
                         'voucher_batch_id' => $voucherBatch->id,
                         'student_id' => $student?->id,
-                        'bank_id' => $bank?->id,
                         'bank_account_id' => $bankAccount?->id,
                         'payment_type' => $row[$mapping['payment_type']] ?? 'Transferencia',
                         'operation_number' => trim($operation),

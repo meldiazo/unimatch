@@ -174,8 +174,8 @@
                   @enderror
                 </div>
                 <div class="form-group col-md-4">
-                  <label for="manual-account">Cuenta bancaria (opcional)</label>
-                  <select name="bank_account_id" id="manual-account" class="form-control @error('bank_account_id') is-invalid @enderror">
+                  <label for="manual-account">Cuenta bancaria</label>
+                  <select name="bank_account_id" id="manual-account" class="form-control @error('bank_account_id') is-invalid @enderror" required>
                     <option value="">Selecciona cuenta</option>
                     @foreach ($banks as $bank)
                       @foreach ($bank->accounts as $account)
@@ -284,7 +284,7 @@
               </thead>
               <tbody>
                 @forelse ($recentVouchers as $voucher)
-                  <tr data-search="{{ strtolower(($voucher->student->full_name ?? '').' '.$voucher->bank->name.' '.$voucher->status.' '.$voucher->operation_number) }}">
+                  <tr data-search="{{ strtolower(($voucher->student->full_name ?? '').' '.($voucher->bank->name ?? '').' '.$voucher->status.' '.$voucher->operation_number) }}">
                     <td>{{ optional($voucher->paid_at)->format('d/m/Y') ?? '—' }}</td>
                     <td>{{ $voucher->student->full_name ?? '—' }}</td>
                     <td>{{ $voucher->bank->name ?? '—' }}</td>

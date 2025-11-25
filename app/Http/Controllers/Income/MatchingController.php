@@ -139,12 +139,11 @@ class MatchingController extends Controller
 
     private function finalizeMatch(BankStatementLine $line, PaymentVoucher $voucher, User $user): array
     {
-        $line->loadMissing('statement.bank');
+        $line->loadMissing('statement.account.bank');
 
         $transaction = Transaction::create([
             'bank_statement_line_id' => $line->id,
             'payment_voucher_id' => $voucher->id,
-            'student_id' => $voucher->student_id,
             'status' => 'matched',
             'notes' => null,
             'matched_by' => $user->id,
@@ -173,7 +172,7 @@ class MatchingController extends Controller
                 'id' => $transaction->id,
                 'transactionId' => $line->id,
                 'voucherId' => $voucher->id,
-                'bankId' => optional($line->statement?->bank)->id,
+                'bankId' => optional($line->statement?->account?->bank)->id,
                 'student' => $voucher->student?->full_name ?? 'Sin estudiante',
                 'amount' => (float) $line->amount,
                 'date' => now()->toDateString(),

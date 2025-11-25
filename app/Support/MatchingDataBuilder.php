@@ -42,8 +42,8 @@ class MatchingDataBuilder
             ->groupBy(fn ($voucher) => $voucher->operation_number);
 
         $transactions = BankStatementLine::with([
-            'statement.bank',
-            'transaction.student',
+            'statement.account.bank',
+            'transaction.voucher.student',
         ])
             ->latest('operation_date')
             ->take(100)
@@ -80,14 +80,15 @@ class MatchingDataBuilder
                 return [
                     'id' => 'tx-'.$line->id,
                     'db_id' => $line->id,
-                    'studentId' => $line->transaction?->student_id,
-                    'student' => $line->transaction?->student?->full_name
+                    'studentId' => $line->transaction?->voucher?->student_id
+                        ?? $suggestion?->student_id,
+                    'student' => $line->transaction?->voucher?->student?->full_name
                         ?? $suggestion?->student?->full_name
                         ?? 'Por asignar',
-                    'enrollment' => $line->transaction?->student?->code
+                    'enrollment' => $line->transaction?->voucher?->student?->code
                         ?? $suggestion?->student?->code
                         ?? '—',
-                    'bankId' => optional($line->statement?->bank)->id,
+                    'bankId' => optional($line->statement?->account?->bank)->id,
                     'amount' => (float) $line->amount,
                     'reference' => $line->reference ?? $line->operation_number ?? '—',
                     'date' => optional($line->operation_date)?->toDateTimeString()
@@ -113,14 +114,14 @@ class MatchingDataBuilder
                 'issueDate' => optional($voucher->paid_at)?->toDateString() ?? now()->toDateString(),
                 'dueDate' => optional($voucher->paid_at)?->toDateString() ?? now()->toDateString(),
                 'status' => $voucher->status,
-                'bankId' => $voucher->bank_id,
+                'bankId' => optional($voucher->bankAccount?->bank)->id,
                 'operation_number' => $voucher->operation_number,
             ];
         })->values();
 
         $latestReconciliations = Transaction::with([
             'voucher.student',
-            'line.statement.bank',
+            'line.statement.account.bank',
         ])
             ->latest('matched_at')
             ->take(30)
@@ -132,7 +133,7 @@ class MatchingDataBuilder
                     'id' => $transaction->id,
                     'transactionId' => $line?->id,
                     'voucherId' => $transaction->payment_voucher_id,
-                    'bankId' => optional($line?->statement?->bank)->id,
+                    'bankId' => optional($line?->statement?->account?->bank)->id,
                     'student' => $transaction->voucher?->student?->full_name ?? 'Sin estudiante',
                     'amount' => (float) ($line?->amount ?? $transaction->voucher?->amount ?? 0),
                     'date' => optional($transaction->matched_at ?? $line?->operation_date)?->toDateString()

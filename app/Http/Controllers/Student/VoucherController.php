@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankAccount;
 use App\Models\PaymentVoucher;
 use App\Models\Student;
 use App\Models\User;
@@ -20,6 +21,7 @@ class VoucherController extends Controller
         $validated = $request->validate([
             'student_code' => ['required', 'string'],
             'bank_id' => ['nullable', 'exists:banks,id'],
+            'bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
             'payment_type' => ['required', 'string', 'max:50'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'paid_at' => ['required', 'date'],
@@ -34,12 +36,22 @@ class VoucherController extends Controller
 
         abort_unless($student, 422, 'No se encontró tu registro de estudiante.');
 
+        if (($validated['bank_account_id'] ?? null) && $validated['bank_id']) {
+            abort_unless(
+                BankAccount::where('id', $validated['bank_account_id'])
+                    ->where('bank_id', $validated['bank_id'])
+                    ->exists(),
+                422,
+                'La cuenta bancaria no pertenece al banco seleccionado.'
+            );
+        }
+
         $path = $request->file('voucher_file')->store('vouchers', 'public');
 
         PaymentVoucher::create([
             'voucher_batch_id' => null,
             'student_id' => $student->id,
-            'bank_id' => $validated['bank_id'] ?? null,
+            'bank_account_id' => $validated['bank_account_id'] ?? null,
             'payment_type' => $validated['payment_type'],
             'operation_number' => $validated['operation_number'],
             'account_reference' => $validated['account_reference'] ?? null,

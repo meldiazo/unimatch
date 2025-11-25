@@ -130,6 +130,22 @@
                         <div class="invalid-feedback">{{ $message }}</div>
                       @enderror
                     </div>
+                    <div class="form-group col-md-6">
+                      <label for="student-account-select">Cuenta bancaria (opcional)</label>
+                      <select name="bank_account_id" id="student-account-select" class="form-control @error('bank_account_id') is-invalid @enderror">
+                        <option value="">Selecciona cuenta</option>
+                        @foreach ($banks as $bank)
+                          @foreach ($bank->accounts as $account)
+                            <option value="{{ $account->id }}" data-bank="{{ $bank->id }}" {{ old('bank_account_id') == $account->id ? 'selected' : '' }}>
+                              {{ $bank->short_code }} · {{ $account->account_number }}
+                            </option>
+                          @endforeach
+                        @endforeach
+                      </select>
+                      @error('bank_account_id')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                      @enderror
+                    </div>
                     <div class="form-group col-md-3">
                       <label for="student-paid-at">Fecha del pago</label>
                       <input type="date" name="paid_at" id="student-paid-at" class="form-control @error('paid_at') is-invalid @enderror" value="{{ old('paid_at') }}" required>
@@ -163,8 +179,8 @@
                   </div>
                   <div class="form-row">
                     <div class="form-group col-md-4">
-                      <label for="student-account">Cuenta destino (opcional)</label>
-                      <input type="text" name="account_reference" id="student-account" class="form-control @error('account_reference') is-invalid @enderror" value="{{ old('account_reference') }}">
+                      <label for="student-account">Referencia de cuenta (opcional)</label>
+                      <input type="text" name="account_reference" id="student-account" class="form-control @error('account_reference') is-invalid @enderror" value="{{ old('account_reference') }}" placeholder="Ej: Caja central">
                       @error('account_reference')
                         <div class="invalid-feedback">{{ $message }}</div>
                       @enderror
@@ -235,3 +251,41 @@
     <aside class="control-sidebar control-sidebar-dark"></aside>
   </div>
 @endsection
+
+@push('scripts')
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const bankSelect = document.getElementById('student-bank');
+    const accountSelect = document.getElementById('student-account-select');
+
+    if (!bankSelect || !accountSelect) {
+      return;
+    }
+
+    const baseOptions = Array.from(accountSelect.querySelectorAll('option[data-bank]'));
+    const placeholder = accountSelect.querySelector('option[value=""]');
+
+    const renderAccounts = () => {
+      const selectedBank = bankSelect.value;
+      const previous = accountSelect.value;
+      accountSelect.innerHTML = '';
+      if (placeholder) {
+        accountSelect.appendChild(placeholder.cloneNode(true));
+      }
+
+      baseOptions.forEach((option) => {
+        if (!selectedBank || option.dataset.bank === selectedBank) {
+          accountSelect.appendChild(option.cloneNode(true));
+        }
+      });
+
+      if (previous) {
+        accountSelect.value = previous;
+      }
+    };
+
+    renderAccounts();
+    bankSelect.addEventListener('change', renderAccounts);
+  });
+</script>
+@endpush
