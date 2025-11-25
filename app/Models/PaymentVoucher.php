@@ -12,6 +12,7 @@ class PaymentVoucher extends Model
     protected $fillable = [
         'voucher_batch_id',
         'student_id',
+        'bank_id',
         'bank_account_id',
         'cashbox_number',
         'operation_number',
@@ -62,14 +63,14 @@ class PaymentVoucher extends Model
         return $this->belongsTo(Student::class);
     }
 
+    public function bank()
+    {
+        return $this->belongsTo(Bank::class);
+    }
+
     public function bankAccount()
     {
         return $this->belongsTo(BankAccount::class);
-    }
-
-    public function getBankAttribute()
-    {
-        return $this->bankAccount?->bank;
     }
 
     public function transaction()
