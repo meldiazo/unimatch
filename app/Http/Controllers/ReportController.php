@@ -55,8 +55,6 @@ class ReportController extends Controller
 
         $rows = $query->get()->map(function (PaymentVoucher $voucher) {
                 $student = $voucher->student;
-                $document = $student?->meta['document'] ?? 'N/A';
-                $razonSocial = $student?->full_name ?? 'N/A';
                 $payload = is_array($voucher->raw_payload ?? null) ? $voucher->raw_payload : [];
 
                 return [
@@ -64,8 +62,8 @@ class ReportController extends Controller
                     'fecha_pago_estudiante' => $this->formatDate($voucher->paid_at),
                     'fecha_recepcion' => $this->formatDate($voucher->received_at),
                     'num_factura' => Arr::get($payload, 'num_factura', '—'),
-                    'nit_ci' => $document ?: '—',
-                    'razon_social' => $razonSocial ?: '—',
+                    'nit_ci' => '—',
+                    'razon_social' => '—',
                     'nombre_estudiante' => $student?->full_name ?? 'N/A',
                     'tipo_pago' => $voucher->payment_type ?? 'N/A',
                     'monto' => $voucher->amount,

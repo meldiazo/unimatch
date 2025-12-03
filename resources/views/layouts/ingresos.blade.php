@@ -29,10 +29,11 @@
     $settingsActive = request()->routeIs('admin.settings.reconciliation.*');
     $catalogActive = $banksActive || $accountsActive || $settingsActive;
     $usersActive = request()->routeIs('admin.users.*');
+    $reconciliationsReviewActive = request()->routeIs('admin.reconciliations.index');
     $reportActive = request()->routeIs('reports.pagos');
   @endphp
 
-  <div class="wrapper" id="app-wrapper"
+  <div class="wrapper layout-fixed" id="app-wrapper"
        data-user-name="{{ $user->name }}"
        data-user-role="{{ $roleLabel }}"
        data-user-email="{{ $user->email }}"
@@ -40,7 +41,7 @@
     <nav class="main-header navbar navbar-expand navbar-light navbar-white">
       <ul class="navbar-nav">
         <li class="nav-item">
-          <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+          <span class="nav-link"><i class="fas fa-bars text-muted"></i></span>
         </li>
         <li class="nav-item d-none d-md-inline-block">
           <span class="navbar-brand mb-0 h5">{{ $panelTitle }}</span>
@@ -74,9 +75,21 @@
           @if ($isExecutivePanel)
             <ul class="nav nav-pills nav-sidebar flex-column">
               <li class="nav-item">
-                <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
+                <a href="{{ route('admin.dashboard') }}" class="nav-link {{ $activeMenu === 'dashboard' ? 'active' : '' }}">
                   <i class="nav-icon fas fa-chart-pie"></i>
                   <p>Tablero ejecutivo</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.dashboard', ['view' => 'facturacion']) }}" class="nav-link {{ $activeMenu === 'facturacion' ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-file-invoice-dollar"></i>
+                  <p>Facturación</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.dashboard', ['view' => 'students']) }}" class="nav-link {{ $activeMenu === 'students' ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-user-check"></i>
+                  <p>Seguimiento de estudiantes</p>
                 </a>
               </li>
               <li class="nav-item">
@@ -95,6 +108,12 @@
                 <a href="{{ route('admin.settings.reconciliation.edit') }}" class="nav-link {{ $settingsActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-sliders-h"></i>
                   <p>Parámetros de conciliación</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.reconciliations.index') }}" class="nav-link {{ $reconciliationsReviewActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-clipboard-check"></i>
+                  <p>Revisión de conciliaciones</p>
                 </a>
               </li>
               <li class="nav-item">

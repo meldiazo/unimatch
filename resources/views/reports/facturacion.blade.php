@@ -70,7 +70,6 @@
                 <option value="">Todos</option>
                 <option value="facturado" {{ $filters['billing_status'] === 'facturado' ? 'selected' : '' }}>Facturado</option>
                 <option value="pendiente" {{ $filters['billing_status'] === 'pendiente' ? 'selected' : '' }}>Pendiente</option>
-                <option value="rechazado" {{ $filters['billing_status'] === 'rechazado' ? 'selected' : '' }}>Rechazado</option>
               </select>
             </div>
             <div class="form-group col-md-3 mt-3">

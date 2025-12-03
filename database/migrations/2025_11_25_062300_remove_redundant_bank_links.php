@@ -116,7 +116,8 @@ return new class extends Migration {
 
         if ($driver === 'pgsql') {
             $result = $connection->select("SELECT to_regclass(?) as idx", [$index]);
-            $value = $result[0]->idx ?? ($result[0]['idx'] ?? null);
+            $row = $result[0] ?? null;
+            $value = is_object($row) ? ($row->idx ?? null) : ($row['idx'] ?? null);
             return ! empty($value);
         }
 

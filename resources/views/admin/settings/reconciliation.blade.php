@@ -110,7 +110,7 @@
                   placeholder="Un estado por línea"
                   @disabled($readOnly)
                 >{{ trim(old('voucher_statuses', $statusList)) }}</textarea>
-                <small class="text-muted">Ejemplo: recibido, validado, rechazado, demasía.</small>
+                <small class="text-muted">Ejemplo: recibido, conciliado, rechazado, demasía.</small>
                 @error('voucher_statuses')
                   <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
@@ -125,11 +125,21 @@
                   placeholder="Describe lógica para aprobar/rechazar"
                   @disabled($readOnly)
                 >{{ trim(old('voucher_rules', $settings->voucher_rules)) }}</textarea>
-                <small class="text-muted">Describe qué validar (monto, fechas, adjuntos, excedentes).</small>
                 @error('voucher_rules')
                   <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
               </div>
+              @php
+                $defaultTemplate = implode(PHP_EOL, [
+                    'student_code,operation_number,amount,bank_code,account_number,paid_at,status,payment_type',
+                    'juan.perez@unimatch.local,OP1001,500.00,BNB,96356224,2025-11-01,recibido,Transferencia',
+                    '# amount usa punto decimal; la moneda se asume BOB; status permitido: recibido, conciliado, rechazado, demasía.'
+                ]);
+                $currentTemplate = trim(old('voucher_template_help', $settings->voucher_template_help));
+                if ($currentTemplate === '') {
+                    $currentTemplate = $defaultTemplate;
+                }
+              @endphp
               <div class="form-group col-md-4">
                 <label for="voucher_template_help">Plantilla de voucher / guía</label>
                 <textarea
@@ -139,11 +149,7 @@
                   class="form-control @error('voucher_template_help') is-invalid @enderror"
                   placeholder="Instrucciones para quien sube vouchers"
                   @disabled($readOnly)
-                >{{ trim(old('voucher_template_help', $settings->voucher_template_help)) }}</textarea>
-                <small class="text-muted">
-                  Ej: CSV con encabezados <code>student_code,bank_code,account_number,operation_number,amount,currency,paid_at,status,payment_type</code>
-                  y valores separados por coma sin comillas extra.
-                </small>
+                >{{ $currentTemplate }}</textarea>
                 @error('voucher_template_help')
                   <div class="invalid-feedback">{{ $message }}</div>
                 @enderror

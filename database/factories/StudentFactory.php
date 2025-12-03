@@ -14,7 +14,6 @@ class StudentFactory extends Factory
         return [
             'code' => $this->faker->unique()->numerify('20210###'),
             'full_name' => $this->faker->name(),
-            'program' => $this->faker->randomElement(['Contabilidad', 'Economía', 'Administración']),
             'email' => $this->faker->unique()->safeEmail(),
             'meta' => [
                 'document' => $this->faker->numerify('######## LP'),

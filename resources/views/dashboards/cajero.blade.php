@@ -55,6 +55,12 @@
                 <p>Consulta de transacciones</p>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="#facturacion-section" class="nav-link">
+                <i class="nav-icon fas fa-file-invoice-dollar"></i>
+                <p>Facturación</p>
+              </a>
+            </li>
           </ul>
         </nav>
       </div>
@@ -80,25 +86,35 @@
             </div>
             <div class="card-body">
               <div class="form-row">
-                <div class="form-group col-md-4">
+                <div class="form-group col-md-3">
                   <label for="cashier-search">Buscar estudiante / matrícula</label>
                   <input type="search" class="form-control" id="cashier-search" placeholder="Ej. Andrea López o 20210145">
                 </div>
-                <div class="form-group col-md-4">
+                <div class="form-group col-md-3">
                   <label for="cashier-bank">Banco</label>
                   <select id="cashier-bank" class="form-control">
-                    <option selected>Todos</option>
-                    <option>Banco Nacional de Bolivia</option>
-                    <option>Banco Unión</option>
+                    <option value="" selected>Todos</option>
+                    @foreach ($banks as $bank)
+                      <option value="{{ $bank->id }}">{{ $bank->name }}</option>
+                    @endforeach
                   </select>
                 </div>
-                <div class="form-group col-md-4">
+                <div class="form-group col-md-3">
                   <label for="cashier-status">Estado</label>
                   <select id="cashier-status" class="form-control">
-                    <option>Todos</option>
-                    <option>Facturado</option>
-                    <option>Pendiente</option>
-                    <option>Pago en demasía</option>
+                    <option value="" selected>Todos</option>
+                    <option value="recibido">Recibido</option>
+                    <option value="conciliado">Conciliado</option>
+                    <option value="rechazado">Rechazado</option>
+                    <option value="demasia">Pago en demasía</option>
+                  </select>
+                </div>
+                <div class="form-group col-md-3">
+                  <label for="cashier-billing">Estado de factura</label>
+                  <select id="cashier-billing" class="form-control">
+                    <option value="" selected>Todos</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="facturado">Facturado</option>
                   </select>
                 </div>
               </div>
@@ -120,17 +136,100 @@
                     <th>Monto</th>
                     <th>Estado</th>
                     <th>Factura</th>
-                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="cashier-tbody">
                   <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="6" class="text-center text-muted py-4">
                       Usa los filtros para buscar transacciones.
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div class="card card-outline card-brand mt-4" id="facturacion-section">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h3 class="card-title mb-0"><i class="fas fa-file-invoice-dollar mr-2"></i>Facturación</h3>
+              <span class="badge badge-warning">Registros: {{ $facturacionVouchers->count() }}</span>
+            </div>
+            <div class="card-body">
+              @if (session('status'))
+                <div class="alert alert-success alert-dismissible fade show">
+                  {{ session('status') }}
+                  <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+              @endif
+              @if ($errors->has('billing_status'))
+                <div class="alert alert-danger alert-dismissible fade show">
+                  {{ $errors->first('billing_status') }}
+                  <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+              @endif
+              <p class="text-muted mb-3">
+                Solo se listan vouchers conciliados o en demasía. Ajusta su estado de facturación según corresponda.
+              </p>
+              <div class="table-responsive">
+                <table class="table table-hover">
+                  <thead class="thead-light">
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Estudiante</th>
+                      <th>Banco</th>
+                      <th>Monto</th>
+                      <th>Estado de facturación</th>
+                      <th>Actualizar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse ($facturacionVouchers as $voucher)
+                      <tr>
+                        <td>{{ optional($voucher->paid_at)->format('d/m/Y') ?? '—' }}</td>
+                        <td>
+                          {{ $voucher->student->full_name ?? '—' }}
+                          <small class="d-block text-muted">
+                            <code>{{ $voucher->student->code ?? '—' }}</code>
+                          </small>
+                        </td>
+                        <td>{{ $voucher->bank->name ?? '—' }}</td>
+                        <td>Bs {{ number_format($voucher->amount, 2, ',', '.') }}</td>
+                        <td>
+                          <span class="badge badge-{{ ($voucher->billing_status === 'facturado') ? 'success' : 'warning' }}">
+                            {{ ucfirst($voucher->billing_status ?? 'pendiente') }}
+                          </span>
+                        </td>
+                        <td>
+                          <form method="POST" action="{{ route('cajero.billing.update', $voucher) }}" class="form-inline">
+                            @csrf
+                            @method('PATCH')
+                            <div class="input-group input-group-sm">
+                              <select name="billing_status" class="form-control mr-2">
+                                @foreach ($billingOptions as $value => $label)
+                                  <option value="{{ $value }}" {{ ($voucher->billing_status ?? 'pendiente') === $value ? 'selected' : '' }}>
+                                    {{ $label }}
+                                  </option>
+                                @endforeach
+                              </select>
+                              <div class="input-group-append">
+                                <button type="submit" class="btn btn-brand btn-sm">Guardar</button>
+                              </div>
+                            </div>
+                          </form>
+                        </td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No hay vouchers conciliados aún.</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -147,6 +246,7 @@
     const searchInput = document.getElementById('cashier-search');
     const bankSelect = document.getElementById('cashier-bank');
     const statusSelect = document.getElementById('cashier-status');
+    const billingSelect = document.getElementById('cashier-billing');
     const tbody = document.getElementById('cashier-tbody');
 
     const performSearch = async () => {
@@ -154,6 +254,7 @@
         query: searchInput.value,
         bank_id: bankSelect.value || '',
         status: statusSelect.value || '',
+        billing_status: billingSelect.value || '',
       });
 
       try {
@@ -170,17 +271,19 @@
         tbody.innerHTML = '';
 
         if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No se encontraron resultados.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No se encontraron resultados.</td></tr>';
           return;
         }
 
         data.data.forEach(tx => {
           const row = document.createElement('tr');
-          const statusBadge = `badge-${
-            tx.status === 'recibido' ? 'info' : 
-            tx.status === 'validado' ? 'success' : 
-            tx.status === 'rechazado' ? 'danger' : 'warning'
-          }`;
+          const statusMap = {
+            recibido: 'info',
+            conciliado: 'success',
+            rechazado: 'danger',
+            demasia: 'warning',
+          };
+          const statusBadge = `badge-${statusMap[tx.status] || 'secondary'}`;
 
           const billingBadge = `badge-${
             tx.billing_status === 'facturado' ? 'success' :
@@ -194,32 +297,36 @@
             <td class="text-right"><strong>Bs ${parseFloat(tx.amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</strong></td>
             <td><span class="badge ${statusBadge}">${tx.status}</span></td>
             <td><span class="badge ${billingBadge}">${tx.billing_status}</span></td>
-            <td>
-              ${tx.document_path ? `
-                <div class="btn-group" role="group">
-                  <a href="/storage/${tx.document_path}" target="_blank" class="btn btn-link btn-sm" title="Ver voucher">
-                    <i class="fas fa-file-pdf text-danger"></i> Voucher
-                  </a>
-                  <a href="/cashier/vouchers/${tx.id}/certificate" class="btn btn-link btn-sm" title="Descargar constancia">
-                    <i class="fas fa-download text-primary"></i> Constancia
-                  </a>
-                </div>
-              ` : '<span class="text-muted">—</span>'}
-            </td>
           `;
           tbody.appendChild(row);
         });
       } catch (error) {
         console.error('Error:', error);
-        tbody.innerHTML = '<tr><td colspan="7" class="alert alert-danger mb-0">Error al buscar. Intenta de nuevo.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="alert alert-danger mb-0">Error al buscar. Intenta de nuevo.</td></tr>';
       }
     };
 
     // Ejecutar búsqueda al escribir o cambiar filtros
-    [searchInput, bankSelect, statusSelect].forEach(el => {
+    [bankSelect, statusSelect, billingSelect].forEach(el => {
       el.addEventListener('change', performSearch);
     });
-    searchInput.addEventListener('keyup', performSearch);
+    searchInput.addEventListener('keyup', () => {
+      performSearch();
+    });
+
+    document.querySelectorAll('.alert .close').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        const alert = btn.closest('.alert');
+        if (alert) {
+          alert.classList.remove('show');
+          alert.addEventListener('transitionend', () => alert.remove(), { once: true });
+          setTimeout(() => alert.remove(), 200);
+        }
+      });
+    });
+
+    performSearch();
   });
 </script>
 @endpush

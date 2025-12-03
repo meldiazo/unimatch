@@ -66,7 +66,6 @@ class StudentController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:50', Rule::unique('students', 'code')->ignore($student?->id)],
             'full_name' => ['required', 'string', 'max:255'],
-            'program' => ['nullable', 'string', 'max:120'],
             'email' => ['nullable', 'email', Rule::unique('students', 'email')->ignore($student?->id)],
             'document' => ['nullable', 'string', 'max:80'],
         ]);
@@ -81,7 +80,6 @@ class StudentController extends Controller
         return [
             'code' => $validated['code'],
             'full_name' => $validated['full_name'],
-            'program' => $validated['program'] ?? null,
             'email' => $validated['email'] ?? null,
             'meta' => empty($meta) ? null : $meta,
         ];

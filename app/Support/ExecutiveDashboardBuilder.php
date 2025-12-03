@@ -4,8 +4,11 @@ namespace App\Support;
 
 use App\Models\Bank;
 use App\Models\PaymentVoucher;
+use App\Models\Student;
+use App\Models\StudentBalance;
 use App\Models\Transaction;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ExecutiveDashboardBuilder
 {
@@ -61,12 +64,45 @@ class ExecutiveDashboardBuilder
                 ];
             });
 
+        $facturacion = PaymentVoucher::with(['student', 'bank'])
+            ->whereIn('status', ['conciliado', 'demasia'])
+            ->latest('paid_at')
+            ->take(20)
+            ->get();
+
+        $latestPayments = PaymentVoucher::select('student_id', DB::raw('MAX(paid_at) as last_paid_at'))
+            ->groupBy('student_id')
+            ->pluck('last_paid_at', 'student_id');
+
+        $balances = StudentBalance::select('student_id', DB::raw('SUM(balance_amount) as amount'))
+            ->groupBy('student_id')
+            ->pluck('amount', 'student_id');
+
+        $studentRows = Student::orderBy('full_name')
+            ->take(20)
+            ->get()
+            ->map(function (Student $student) use ($latestPayments, $balances) {
+                $lastPayment = $latestPayments->get($student->id);
+
+                return [
+                    'name' => $student->full_name,
+                    'code' => $student->code,
+                    'last_payment' => $lastPayment
+                        ? Carbon::parse($lastPayment)->format('d/m/Y')
+                        : optional($student->updated_at)->format('d/m/Y'),
+                    'balance' => (float) ($balances->get($student->id, 0)),
+                ];
+            })
+            ->values();
+
         $trend = $this->buildTrend();
 
         return [
             'totals' => $totals,
             'alerts' => $alertas,
             'bankSummaries' => $bankSummaries,
+            'facturacion' => $facturacion,
+            'students' => $studentRows,
             'trend' => $trend,
         ];
     }

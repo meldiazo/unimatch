@@ -18,6 +18,7 @@
   data-shortage-threshold="{{ $reconciliationSettings->shortage_alert_threshold }}"
   data-credit-limit="{{ $reconciliationSettings->credit_max_amount }}"
   data-initial-view="{{ $activeView }}"
+  data-can-manage-billing="{{ auth()->user()->hasRole(\App\Models\User::ROLE_CAJERO) ? '1' : '0' }}"
 @endsection
 
 @section('panel-active-menu', $activeView)
@@ -26,23 +27,17 @@
   <script type="application/json" id="matching-data" class="d-none">
     {!! $matchingData ? json_encode($matchingData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) : '{}' !!}
   </script>
-  <section class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2 align-items-center">
-        <div class="col-sm-6">
-          <h1 class="m-0">Resumen general</h1>
-          <small class="text-muted">Monitorea transacciones, vouchers y facturación por banco.</small>
-        </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-right mb-0">
-            <li class="breadcrumb-item active"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard</li>
-          </ol>
+  <section class="content view" data-view="dashboard">
+    <div class="content-header">
+      <div class="container-fluid">
+        <div class="row mb-2 align-items-center">
+          <div class="col-sm-6">
+            <h1 class="m-0">Resumen general</h1>
+            <small class="text-muted">Monitorea transacciones, vouchers y facturación por banco.</small>
+          </div>
         </div>
       </div>
     </div>
-  </section>
-
-  <section class="content view" data-view="dashboard">
     <div class="container-fluid">
       @if (session('status'))
         <div class="alert alert-success alert-dismissible fade show" role="alert" data-auto-dismiss="6000">
@@ -54,73 +49,39 @@
       @endif
 
       @if (session('import_summary'))
-        <div class="alert alert-info">
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
           <strong>Resumen:</strong>
           Líneas importadas: {{ session('import_summary')['lines'] ?? 0 }} · ID de extracto: {{ session('import_summary')['statement_id'] ?? '—' }}
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
         </div>
       @endif
 
-      <div class="card card-outline card-brand mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h3 class="card-title mb-0"><i class="fas fa-file-upload mr-2"></i>Cargar extracto bancario</h3>
-          <div class="card-tools d-flex align-items-center">
-            <span class="badge badge-light mr-2">CSV</span>
-            <button type="button" class="btn btn-tool" data-card-widget="collapse">
-              <i class="fas fa-minus"></i>
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <form action="{{ route('imports.extracts') }}" method="POST" enctype="multipart/form-data">
-            @csrf
-            <div class="form-group">
-              <label for="file">Archivo (.csv)</label>
-              <input type="file" name="file" id="file" class="form-control-file @error('file') is-invalid @enderror" required>
-              @error('file')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-              @enderror
-              <small class="form-text text-muted">Columnas requeridas: bank_code, account_number, operation_number, amount, operation_date, value_date, reference, description.</small>
-            </div>
-            <button type="submit" class="btn btn-brand">Importar extracto</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="card card-outline card-brand mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0"><i class="fas fa-file-invoice mr-2"></i>Cargar archivo de facturación</h3>
-            <div class="card-tools d-flex align-items-center">
-              <span class="badge badge-light mr-2">CSV</span>
-              <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                <i class="fas fa-minus"></i>
-              </button>
-            </div>
+      <div class="mb-4" id="importAccordion">
+        <div class="card card-primary card-outline mb-3">
+          <div class="card-header">
+            <h4 class="card-title mb-0"><i class="fas fa-file-upload mr-2"></i>Importar extracto bancario</h4>
           </div>
           <div class="card-body">
-            <form action="{{ route('imports.billing') }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ route('imports.extracts') }}" method="POST" enctype="multipart/form-data">
               @csrf
               <div class="form-group">
-                <label for="billing_file">Archivo (.csv)</label>
-                <input type="file" name="billing_file" id="billing_file" class="form-control-file @error('billing_file') is-invalid @enderror" required>
-                @error('billing_file')
+                <label for="file">Archivo (.csv)</label>
+                <input type="file" name="file" id="file" class="form-control-file @error('file') is-invalid @enderror" required>
+                @error('file')
                   <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
-                <small class="form-text text-muted">Columnas: operation_number, billing_status (facturado/pendiente), billed_at (opcional).</small>
+                <small class="form-text text-muted">Columnas requeridas: bank_code, account_number, operation_number, amount, operation_date, value_date, description.</small>
               </div>
-              <button type="submit" class="btn btn-brand">Importar facturación</button>
+              <button type="submit" class="btn btn-brand btn-sm">Importar extracto</button>
             </form>
           </div>
         </div>
 
-        <div class="card card-outline card-brand mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0"><i class="fas fa-clone mr-2"></i>Cargar vouchers en lote</h3>
-            <div class="card-tools d-flex align-items-center">
-              <span class="badge badge-light mr-2">CSV</span>
-              <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                <i class="fas fa-minus"></i>
-              </button>
-            </div>
+        <div class="card card-success card-outline mb-3">
+          <div class="card-header">
+            <h4 class="card-title mb-0"><i class="fas fa-clone mr-2"></i>Importar vouchers</h4>
           </div>
           <div class="card-body">
             <form action="{{ route('imports.vouchers') }}" method="POST" enctype="multipart/form-data">
@@ -131,17 +92,20 @@
                 @error('voucher_file')
                   <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
-                <small class="form-text text-muted">Columnas: student_code, bank_code, account_number, operation_number, amount, currency, paid_at, status, payment_type.</small>
+                <small class="form-text text-muted">
+                  Columnas: student_code, operation_number, amount, bank_code, account_number, paid_at, status, payment_type.
+                  (La moneda se asume BOB).
+                </small>
               </div>
-              <button type="submit" class="btn btn-brand">Importar vouchers</button>
+              <button type="submit" class="btn btn-brand btn-sm">Importar vouchers</button>
             </form>
           </div>
         </div>
 
-        <div class="card card-outline card-brand mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0"><i class="fas fa-pen-alt mr-2"></i>Registrar voucher manual</h3>
-            <span class="badge badge-secondary">Adjunta PDF / imagen</span>
+        <div class="card card-warning card-outline mb-4">
+          <div class="card-header">
+            <h4 class="card-title mb-0"><i class="fas fa-pen-alt mr-2"></i>Registrar voucher manual</h4>
+            <span class="badge badge-light">Adjunta PDF / imagen</span>
           </div>
           <div class="card-body">
             <form action="{{ route('ingresos.vouchers.store') }}" method="POST" enctype="multipart/form-data">
@@ -207,19 +171,15 @@
                 </div>
                 <div class="form-group col-md-3">
                   <label for="manual-type">Tipo de pago</label>
-                  <input type="text" name="payment_type" id="manual-type" class="form-control @error('payment_type') is-invalid @enderror" value="{{ old('payment_type', 'Transferencia') }}" required>
-                  @error('payment_type')
-                    <div class="invalid-feedback">{{ $message }}</div>
-                  @enderror
-                </div>
-                <div class="form-group col-md-3">
-                  <label for="manual-status">Estado</label>
-                  <select name="status" id="manual-status" class="form-control @error('status') is-invalid @enderror" required>
-                    @foreach (['recibido' => 'Recibido', 'validado' => 'Validado', 'demasia' => 'Pago en demasía'] as $value => $label)
-                      <option value="{{ $value }}" {{ old('status') == $value ? 'selected' : '' }}>{{ $label }}</option>
-                    @endforeach
+                  <select name="payment_type" id="manual-type" class="form-control @error('payment_type') is-invalid @enderror" required>
+                    @php
+                      $manualType = old('payment_type', 'Transferencia');
+                    @endphp
+                    <option value="Transferencia" {{ $manualType === 'Transferencia' ? 'selected' : '' }}>Transferencia</option>
+                    <option value="Depósito" {{ $manualType === 'Depósito' ? 'selected' : '' }}>Depósito</option>
+                    <option value="QR" {{ $manualType === 'QR' ? 'selected' : '' }}>QR</option>
                   </select>
-                  @error('status')
+                  @error('payment_type')
                     <div class="invalid-feedback">{{ $message }}</div>
                   @enderror
                 </div>
@@ -233,14 +193,7 @@
                   @enderror
                 </div>
                 <div class="form-group col-md-3">
-                  <label for="manual-cashbox">N° de caja</label>
-                  <input type="text" name="cashbox_number" id="manual-cashbox" class="form-control @error('cashbox_number') is-invalid @enderror" value="{{ old('cashbox_number') }}">
-                  @error('cashbox_number')
-                    <div class="invalid-feedback">{{ $message }}</div>
-                  @enderror
-                </div>
-                <div class="form-group col-md-3">
-                  <label for="manual-reference">Cuenta destino / referencia</label>
+                  <label for="manual-reference">Detalle</label>
                   <input type="text" name="account_reference" id="manual-reference" class="form-control @error('account_reference') is-invalid @enderror" value="{{ old('account_reference') }}">
                   @error('account_reference')
                     <div class="invalid-feedback">{{ $message }}</div>
@@ -258,10 +211,11 @@
             </form>
           </div>
         </div>
+      </div>
 
         <div class="card card-outline card-brand mb-4">
           <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0"><i class="fas fa-list mr-2"></i>Últimos vouchers cargados</h3>
+            <h3 class="card-title mb-0"><i class="fas fa-list mr-2"></i>Vouchers</h3>
             <div class="input-group input-group-sm" style="width: 260px;">
               <input type="search" class="form-control" id="voucher-search" placeholder="Buscar estudiante, banco, estado">
               <div class="input-group-append">
@@ -269,7 +223,7 @@
               </div>
             </div>
           </div>
-          <div class="card-body p-0 table-responsive">
+          <div class="card-body p-0 table-responsive" style="max-height: 360px; overflow-y: auto;">
             <table class="table table-hover mb-0" id="voucher-table">
               <thead class="thead-light">
                 <tr>
@@ -279,17 +233,34 @@
                   <th>Monto</th>
                   <th>Estado</th>
                   <th>Comprobante</th>
-                  <th>Actualizar estado</th>
                 </tr>
               </thead>
               <tbody>
                 @forelse ($recentVouchers as $voucher)
-                  <tr data-search="{{ strtolower(($voucher->student->full_name ?? '').' '.($voucher->bank->name ?? '').' '.$voucher->status.' '.$voucher->operation_number) }}">
+                  <tr
+                    data-search="{{ strtolower(($voucher->student->full_name ?? '').' '.($voucher->bank->name ?? '').' '.$voucher->status.' '.$voucher->operation_number) }}"
+                    data-voucher-id="{{ $voucher->id }}"
+                  >
                     <td>{{ optional($voucher->paid_at)->format('d/m/Y') ?? '—' }}</td>
                     <td>{{ $voucher->student->full_name ?? '—' }}</td>
                     <td>{{ $voucher->bank->name ?? '—' }}</td>
                     <td>Bs {{ number_format($voucher->amount, 2, ',', '.') }}</td>
-                    <td><span class="badge badge-secondary">{{ ucfirst($voucher->status) }}</span></td>
+                    @php
+                      $statusKey = strtolower($voucher->status);
+                      $statusColors = [
+                        'recibido' => 'info',
+                        'conciliado' => 'success',
+                        'rechazado' => 'danger',
+                        'demasia' => 'warning',
+                      ];
+                      $badgeClass = $statusColors[$statusKey] ?? 'secondary';
+                    @endphp
+                    <td>
+                      <span class="badge badge-{{ $badgeClass }}" data-voucher-status>{{ ucfirst($statusKey) }}</span>
+                      <small class="d-block text-muted" data-voucher-reason {{ $voucher->reason ? '' : 'hidden' }}>
+                        {{ $voucher->reason ?? '' }}
+                      </small>
+                    </td>
                     <td>
                       @if ($voucher->document_url)
                         <a href="{{ $voucher->document_url }}" target="_blank" class="btn btn-link btn-sm"><i class="fas fa-file-alt"></i> Ver</a>
@@ -297,22 +268,10 @@
                         <span class="text-muted">Sin archivo</span>
                       @endif
                     </td>
-                    <td>
-                      <form action="{{ route('ingresos.vouchers.update', $voucher) }}" method="POST" class="form-inline">
-                        @csrf
-                        @method('PATCH')
-                        <select name="status" class="form-control form-control-sm mr-2">
-                          @foreach ($statusOptions as $value => $label)
-                            <option value="{{ $value }}" {{ $voucher->status === $value ? 'selected' : '' }}>{{ $label }}</option>
-                          @endforeach
-                        </select>
-                        <button class="btn btn-sm btn-outline-brand">Guardar</button>
-                      </form>
-                    </td>
                   </tr>
                 @empty
                   <tr>
-                    <td colspan="7" class="text-center text-muted py-4">Aún no hay vouchers registrados.</td>
+                    <td colspan="6" class="text-center text-muted py-4">Aún no hay vouchers registrados.</td>
                   </tr>
                 @endforelse
               </tbody>
@@ -338,7 +297,7 @@
                 <div class="inner">
                   <h3 id="suggested-count">0</h3>
                   <p>Coincidencias sugeridas</p>
-                  <small>Basado en monto + referencia</small>
+                  <small>Basado en monto + detalle</small>
                 </div>
                 <div class="icon">
                   <i class="fas fa-lightbulb"></i>
@@ -400,7 +359,7 @@
                     <i class="fas fa-bell mr-2"></i>
                     Alertas recientes
                   </h3>
-                  <button class="btn btn-link btn-sm p-0" id="view-all-alerts">Ver todas</button>
+                  <button type="button" class="btn btn-link btn-sm p-0" id="view-all-alerts">Ver todas</button>
                 </div>
                 <div class="card-body p-0">
                   <div class="empty-state mb-0 rounded-0 border-0" id="alerts-empty">
@@ -415,6 +374,16 @@
       </section>
 
       <section class="content view d-none" data-view="matching">
+        <div class="content-header">
+          <div class="container-fluid">
+            <div class="row mb-2 align-items-center">
+              <div class="col-sm-6">
+                <h1 class="m-0">Conciliación</h1>
+                <small class="text-muted">Gestiona las coincidencias entre extractos y vouchers.</small>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="container-fluid">
           <div class="card card-outline card-brand">
             <div class="card-header d-md-flex justify-content-between align-items-center">
@@ -431,8 +400,8 @@
                   </div>
                   <div class="form-group">
                     <select class="form-control" id="status-filter">
-                      <option value="">Todos</option>
-                      <option value="pending" selected>Pendientes</option>
+                      <option value="" selected>Todos</option>
+                      <option value="pending">Pendientes</option>
                       <option value="suggested">Con sugerencia</option>
                       <option value="flagged">Con alerta</option>
                       <option value="matched">Conciliado</option>
@@ -474,6 +443,16 @@
       </section>
 
       <section class="content view d-none" data-view="reconciliations">
+        <div class="content-header">
+          <div class="container-fluid">
+            <div class="row mb-2 align-items-center">
+              <div class="col-sm-6">
+                <h1 class="m-0">Facturación</h1>
+                <small class="text-muted">Control de operaciones conciliadas y su estado de factura.</small>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="container-fluid">
           <div class="card card-outline card-brand">
             <div class="card-header d-md-flex justify-content-between align-items-center">
@@ -496,8 +475,8 @@
                     <th>Banco</th>
                     <th>Estudiante</th>
                     <th>Monto</th>
-                    <th>Factura / Voucher</th>
-                    <th>Estado</th>
+                  <th>Estado de facturación</th>
+                  <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -508,6 +487,16 @@
       </section>
 
       <section class="content view d-none" data-view="students">
+        <div class="content-header">
+          <div class="container-fluid">
+            <div class="row mb-2 align-items-center">
+              <div class="col-sm-6">
+                <h1 class="m-0">Seguimiento de estudiantes</h1>
+                <small class="text-muted">Revisa estados de pagos y facturas por estudiante.</small>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="container-fluid">
           <div class="card card-outline card-brand">
             <div class="card-header d-md-flex justify-content-between align-items-center">
@@ -516,12 +505,7 @@
                 <p class="card-subtitle">Seguimiento de pagos, facturas y saldos a favor.</p>
               </div>
               <div class="card-tools form-inline">
-                <input type="search" class="form-control mr-2" id="student-search" placeholder="Buscar por nombre o matrícula">
-                <select class="form-control" id="student-status">
-                  <option value="">Todos</option>
-                  <option value="matched">Facturado</option>
-                  <option value="pending">Pendiente</option>
-                </select>
+                <input type="search" class="form-control" id="student-search" placeholder="Buscar por nombre o código">
               </div>
             </div>
             <div class="card-body p-0 table-responsive">
@@ -529,10 +513,8 @@
                 <thead class="thead-light">
                   <tr>
                     <th>Estudiante</th>
-                    <th>Matrícula</th>
-                    <th>Programa</th>
+                    <th>Código</th>
                     <th>Último movimiento</th>
-                    <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -544,16 +526,20 @@
 
   <div class="toast toast-brand" id="toast" aria-live="assertive" hidden></div>
 
-  <div class="modal-overlay d-none" id="match-modal" role="dialog" aria-modal="true">
-    <div class="modal-card">
-      <div class="modal-header d-flex justify-content-between align-items-center">
-        <h3 class="mb-0">Confirmar conciliación</h3>
-        <button class="close" data-close-modal>&times;</button>
-      </div>
-      <div class="modal-body" id="modal-body"></div>
-      <div class="modal-footer">
-        <button class="btn btn-default" data-close-modal>Cancelar</button>
-        <button class="btn btn-brand" id="confirm-match">Confirmar</button>
+  <div class="modal fade" id="match-modal" tabindex="-1" role="dialog" aria-labelledby="matchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="matchModalLabel">Confirmar conciliación</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-footer">
+          <button class="btn btn-default" data-dismiss="modal">Cancelar</button>
+          <button class="btn btn-brand" id="confirm-match">Confirmar</button>
+        </div>
       </div>
     </div>
   </div>

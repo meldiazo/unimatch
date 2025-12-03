@@ -43,7 +43,32 @@ class BankStatementImporter
 
         [$bank, $account] = $this->resolveBankAndAccount($rows);
 
-        return DB::transaction(function () use ($bank, $account, $user, $statementDate, $uploadedFile, $rows) {
+        $incomingOperations = collect($rows)
+            ->map(fn ($row) => trim((string) ($row['operation_number'] ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $existingOperations = BankStatementLine::whereHas('statement', function ($query) use ($account) {
+                $query->where('bank_account_id', $account->id);
+            })
+            ->whereIn('operation_number', $incomingOperations)
+            ->pluck('operation_number')
+            ->map(fn ($op) => trim((string) $op))
+            ->filter()
+            ->all();
+
+        $existingOperationMap = array_flip($existingOperations);
+
+        return DB::transaction(function () use (
+            $bank,
+            $account,
+            $user,
+            $statementDate,
+            $uploadedFile,
+            $rows,
+            $existingOperationMap
+        ) {
             $batch = ImportBatch::create([
                 'import_type' => 'extractos',
                 'source_name' => $uploadedFile->getClientOriginalName(),
@@ -61,14 +86,19 @@ class BankStatementImporter
 
             $mapping = array_merge([
                 'operation_number' => 'operation_number',
-                'reference' => 'reference',
                 'description' => 'description',
                 'operation_date' => 'operation_date',
                 'value_date' => 'value_date',
                 'amount' => 'amount',
             ], Arr::get($bank->format_config, 'columns', []));
 
+            if (! array_key_exists('description', $mapping) && array_key_exists('reference', $mapping)) {
+                $mapping['description'] = $mapping['reference'];
+            }
+
             $inserted = 0;
+            $skipped = 0;
+            $seenInBatch = [];
             foreach ($rows as $index => $row) {
                 $operationNumber = $row[$mapping['operation_number']] ?? null;
                 $amountRaw = $row[$mapping['amount']] ?? null;
@@ -77,21 +107,34 @@ class BankStatementImporter
                     continue;
                 }
 
+                $normalizedOperation = trim((string) $operationNumber);
+                if ($normalizedOperation === '') {
+                    continue;
+                }
+
+                if (isset($existingOperationMap[$normalizedOperation]) || isset($seenInBatch[$normalizedOperation])) {
+                    $skipped++;
+                    continue;
+                }
+
                 $operationDate = $this->parseDate($row[$mapping['operation_date']] ?? null);
                 $valueDate = $this->parseDate($row[$mapping['value_date']] ?? null);
+                $rawDetail = Arr::get($row, $mapping['description']) ?? null;
+                $detail = $rawDetail !== null ? trim((string) $rawDetail) : null;
 
                 BankStatementLine::create([
                     'bank_statement_id' => $statement->id,
                     'line_number' => $index + 1,
-                    'operation_number' => trim((string) $operationNumber),
-                    'reference' => Arr::get($row, $mapping['reference']) ?? null,
-                    'description' => Arr::get($row, $mapping['description']) ?? null,
+                    'operation_number' => $normalizedOperation,
+                    'reference' => $detail,
+                    'description' => $detail,
                     'operation_date' => $operationDate,
                     'value_date' => $valueDate,
                     'amount' => $this->parseAmount($amountRaw),
                     'currency' => 'BOB',
                     'raw_payload' => $row,
                 ]);
+                $seenInBatch[$normalizedOperation] = true;
                 $inserted++;
             }
 
@@ -104,14 +147,16 @@ class BankStatementImporter
                 'summary_data' => [
                     'lines' => $inserted,
                     'file' => $uploadedFile->getClientOriginalName(),
+                    'duplicates_skipped' => $skipped,
                 ],
             ]);
 
             return [
-                'message' => "Extracto importado: {$inserted} líneas registradas.",
+                'message' => "Extracto importado: {$inserted} líneas registradas.".($skipped ? " {$skipped} duplicados omitidos." : ''),
                 'summary' => [
                     'lines' => $inserted,
                     'statement_id' => $statement->id,
+                    'skipped' => $skipped,
                 ],
             ];
         });
@@ -128,7 +173,13 @@ class BankStatementImporter
         $headers = null;
         while (($data = fgetcsv($handle, 0, ',', '"')) !== false) {
             if ($headers === null) {
-                $headers = array_map(fn ($header) => Str::of($header)->trim()->snake()->value(), $data);
+                $headers = array_map(function ($header) {
+                    $normalized = Str::of($header)->trim()->snake()->value();
+                    if (in_array($normalized, ['detalle', 'reference'], true)) {
+                        return 'description';
+                    }
+                    return $normalized;
+                }, $data);
                 continue;
             }
 
@@ -210,10 +261,28 @@ class BankStatementImporter
 
     private function parseAmount(string $value): float
     {
-        $normalized = str_replace(['.', ','], ['', '.'], $value);
-        if (! is_numeric($normalized)) {
-            $normalized = preg_replace('/[^0-9.-]/', '', $value) ?: '0';
+        $raw = trim(str_replace(["\xc2\xa0", ' '], '', $value));
+        if ($raw === '') {
+            return 0.0;
         }
+
+        $hasComma = str_contains($raw, ',');
+        $hasDot = str_contains($raw, '.');
+
+        if ($hasComma && $hasDot) {
+            $lastComma = strrpos($raw, ',');
+            $lastDot = strrpos($raw, '.');
+            if ($lastComma > $lastDot) {
+                $raw = str_replace('.', '', $raw);
+                $raw = str_replace(',', '.', $raw);
+            } else {
+                $raw = str_replace(',', '', $raw);
+            }
+        } elseif ($hasComma) {
+            $raw = str_replace(',', '.', $raw);
+        }
+
+        $normalized = preg_replace('/[^0-9.\-]/', '', $raw) ?: '0';
 
         return (float) $normalized;
     }

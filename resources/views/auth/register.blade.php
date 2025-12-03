@@ -42,7 +42,8 @@
                             id="student_code"
                             value="{{ old('student_code') }}"
                             class="form-control @error('student_code') is-invalid @enderror"
-                            placeholder="Código de estudiante (opcional)"
+                            placeholder="Código de estudiante"
+                            required
                         >
                         <div class="input-group-append">
                             <div class="input-group-text">

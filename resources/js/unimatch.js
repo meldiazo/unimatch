@@ -14,6 +14,7 @@ const DEFAULT_STATE = {
       student: 'Andrea López',
       enrollment: '20210145',
       bankId: 'bn1',
+      bankName: 'Banco Nacional de Bolivia',
       amount: 425.5,
       reference: 'QR7835',
       date: '2024-05-28T09:35:00',
@@ -27,6 +28,7 @@ const DEFAULT_STATE = {
       student: 'Carlos Jiménez',
       enrollment: '20210478',
       bankId: 'bn2',
+      bankName: 'Banco Económico',
       amount: 612.0,
       reference: 'QR7836',
       date: '2024-05-28T09:48:00',
@@ -40,6 +42,7 @@ const DEFAULT_STATE = {
       student: 'Daniela Paredes',
       enrollment: '20210734',
       bankId: 'bn3',
+      bankName: 'Banco Mercantil',
       amount: 380.0,
       reference: 'QR7837',
       date: '2024-05-27T16:02:00',
@@ -53,6 +56,7 @@ const DEFAULT_STATE = {
       student: 'Erick Morales',
       enrollment: '20210267',
       bankId: 'bn4',
+      bankName: 'Banco Bisa',
       amount: 425.5,
       reference: 'QR7838',
       date: '2024-05-28T10:15:00',
@@ -66,6 +70,7 @@ const DEFAULT_STATE = {
       student: 'Fernanda Aguilar',
       enrollment: '20210087',
       bankId: 'bn5',
+      bankName: 'Banco Sol',
       amount: 612.0,
       reference: 'QR7839',
       date: '2024-05-26T11:45:00',
@@ -79,6 +84,7 @@ const DEFAULT_STATE = {
       student: 'Gabriel Soto',
       enrollment: '20210543',
       bankId: 'bn6',
+      bankName: 'Banco Unión',
       amount: 320.0,
       reference: 'QR7840',
       date: '2024-05-25T08:32:00',
@@ -97,7 +103,9 @@ const DEFAULT_STATE = {
       issueDate: '2024-05-20',
       dueDate: '2024-05-31',
       status: 'pendiente',
-      bankId: 'bn1'
+      bankId: 'bn1',
+      bankName: 'Banco Nacional de Bolivia',
+      paymentDate: '2024-05-20'
     },
     {
       id: 'vc-9002',
@@ -108,7 +116,9 @@ const DEFAULT_STATE = {
       issueDate: '2024-05-20',
       dueDate: '2024-05-30',
       status: 'pendiente',
-      bankId: 'bn2'
+      bankId: 'bn2',
+      bankName: 'Banco Económico',
+      paymentDate: '2024-05-20'
     },
     {
       id: 'vc-9003',
@@ -119,7 +129,9 @@ const DEFAULT_STATE = {
       issueDate: '2024-05-18',
       dueDate: '2024-05-29',
       status: 'pendiente',
-      bankId: 'bn3'
+      bankId: 'bn3',
+      bankName: 'Banco Mercantil',
+      paymentDate: '2024-05-18'
     },
     {
       id: 'vc-9004',
@@ -130,7 +142,9 @@ const DEFAULT_STATE = {
       issueDate: '2024-05-21',
       dueDate: '2024-06-01',
       status: 'pendiente',
-      bankId: 'bn4'
+      bankId: 'bn4',
+      bankName: 'Banco Bisa',
+      paymentDate: '2024-05-21'
     },
     {
       id: 'vc-9005',
@@ -141,7 +155,9 @@ const DEFAULT_STATE = {
       issueDate: '2024-05-19',
       dueDate: '2024-05-30',
       status: 'pendiente',
-      bankId: 'bn5'
+      bankId: 'bn5',
+      bankName: 'Banco Sol',
+      paymentDate: '2024-05-19'
     },
     {
       id: 'vc-9006',
@@ -152,7 +168,9 @@ const DEFAULT_STATE = {
       issueDate: '2024-05-17',
       dueDate: '2024-05-29',
       status: 'pendiente',
-      bankId: 'bn6'
+      bankId: 'bn6',
+      bankName: 'Banco Unión',
+      paymentDate: '2024-05-17'
     }
   ],
   reconciliations: [
@@ -164,7 +182,8 @@ const DEFAULT_STATE = {
       student: 'Rosa Medina',
       amount: 425.5,
       date: '2024-05-24',
-      status: 'Conciliado'
+      status: 'conciliado',
+      billing_status: 'pendiente'
     },
     {
       id: 'rc-1002',
@@ -174,7 +193,8 @@ const DEFAULT_STATE = {
       student: 'Luis Pérez',
       amount: 612.0,
       date: '2024-05-23',
-      status: 'Conciliado'
+      status: 'conciliado',
+      billing_status: 'facturado'
     }
   ],
   students: [
@@ -182,7 +202,6 @@ const DEFAULT_STATE = {
       id: 'st-001',
       name: 'Andrea López',
       enrollment: '20210145',
-      program: 'Contabilidad',
       lastPayment: '2024-05-28',
       status: 'pending'
     },
@@ -190,7 +209,6 @@ const DEFAULT_STATE = {
       id: 'st-002',
       name: 'Carlos Jiménez',
       enrollment: '20210478',
-      program: 'Economía',
       lastPayment: '2024-05-28',
       status: 'pending'
     },
@@ -198,7 +216,6 @@ const DEFAULT_STATE = {
       id: 'st-003',
       name: 'Daniela Paredes',
       enrollment: '20210734',
-      program: 'Administración',
       lastPayment: '2024-05-27',
       status: 'flagged'
     },
@@ -206,7 +223,6 @@ const DEFAULT_STATE = {
       id: 'st-004',
       name: 'Erick Morales',
       enrollment: '20210267',
-      program: 'Marketing',
       lastPayment: '2024-05-28',
       status: 'pending'
     },
@@ -214,9 +230,8 @@ const DEFAULT_STATE = {
       id: 'st-005',
       name: 'Fernanda Aguilar',
       enrollment: '20210087',
-      program: 'Ingeniería Industrial',
       lastPayment: '2024-05-26',
-      status: 'matched'
+      status: 'conciliado'
     }
   ]
 };
@@ -254,6 +269,167 @@ const state = {
   }
 };
 
+const STATUS_BADGE_MAP = {
+  recibido: 'badge-info',
+  conciliado: 'badge-success',
+  rechazado: 'badge-danger',
+  demasia: 'badge-warning',
+  facturado: 'badge-success',
+  pending: 'badge-secondary',
+  suggested: 'badge-warning',
+  flagged: 'badge-danger',
+  matched: 'badge-success',
+};
+
+const STATUS_LABEL_MAP = {
+  recibido: 'Recibido',
+  conciliado: 'Conciliado',
+  rechazado: 'Rechazado',
+  demasia: 'Pago en demasía',
+  facturado: 'Facturado',
+  pending: 'Pendiente',
+  suggested: 'Sugerido',
+  flagged: 'Alerta',
+  matched: 'Conciliado',
+};
+
+function normalizeStatusKey(status) {
+  if (!status) {
+    return '';
+  }
+
+  return typeof status === 'string' ? status.toLowerCase() : status;
+}
+
+function getStatusBadgeClass(status) {
+  const key = normalizeStatusKey(status);
+  return STATUS_BADGE_MAP[key] || 'badge-secondary';
+}
+
+function formatStatus(status) {
+  const key = normalizeStatusKey(status);
+  if (STATUS_LABEL_MAP[key]) {
+    return STATUS_LABEL_MAP[key];
+  }
+
+  if (!status) {
+    return '';
+  }
+
+  const str = String(status);
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function extractVoucherDbId(voucher) {
+  if (!voucher) {
+    return null;
+  }
+
+  if (voucher.db_id) {
+    return String(voucher.db_id);
+  }
+
+  if (voucher.id) {
+    const id = String(voucher.id);
+    if (id.startsWith('vc-')) {
+      return id.slice(3);
+    }
+
+    return id;
+  }
+
+  return null;
+}
+
+function updateRecentVoucherStatus(voucherDbId, status, reason = '') {
+  if (!voucherDbId) {
+    return;
+  }
+
+  const row = document.querySelector(`#voucher-table tr[data-voucher-id="${voucherDbId}"]`);
+  if (!row) {
+    return;
+  }
+
+  const badge = row.querySelector('[data-voucher-status]');
+  const reasonEl = row.querySelector('[data-voucher-reason]');
+  const statusKey = status ? status.toLowerCase() : 'recibido';
+
+  if (badge) {
+    badge.className = `badge ${getStatusBadgeClass(statusKey)}`;
+    badge.textContent = formatStatus(statusKey);
+  }
+
+  if (reasonEl) {
+    if (reason) {
+      reasonEl.textContent = reason;
+      reasonEl.hidden = false;
+    } else {
+      reasonEl.textContent = '';
+      reasonEl.hidden = true;
+    }
+  }
+}
+
+function buildStudentDirectory(students = []) {
+  const directory = new Map();
+  students.forEach((student) => {
+    const enrollment = (student?.enrollment ?? '').toString().trim();
+    if (!enrollment) {
+      return;
+    }
+
+    directory.set(enrollment.toUpperCase(), student?.name ?? enrollment);
+  });
+
+  return directory;
+}
+
+function lookupStudentName(directory, identifier) {
+  if (!identifier) {
+    return null;
+  }
+
+  const normalized = identifier.toString().trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return directory.get(normalized) ?? null;
+}
+
+function normalizeStudentEntities() {
+  const directory = buildStudentDirectory(state.students || []);
+  const assignName = (record, codeKey = 'enrollment') => {
+    if (!record) {
+      return;
+    }
+
+    const candidateCode = record[codeKey] ?? record.enrollment ?? record.student_code;
+    const resolvedName = lookupStudentName(directory, candidateCode);
+    if (resolvedName) {
+      record.student_name = resolvedName;
+      if (!record.student || record.student === candidateCode) {
+        record.student = resolvedName;
+      }
+    }
+  };
+
+  (state.transactions || []).forEach((tx) => assignName(tx, 'enrollment'));
+  (state.vouchers || []).forEach((voucher) => assignName(voucher, 'student_code'));
+  (state.reconciliations || []).forEach((item) => assignName(item, 'student_code'));
+}
+
+normalizeStudentEntities();
+
+function getStudentName(entity) {
+  if (!entity) {
+    return '—';
+  }
+
+  return entity.student_name || entity.student || '—';
+}
+
 const views = document.querySelectorAll('.view');
 const navLinks = document.querySelectorAll('.nav-link[data-target]');
 const bankFilter = document.getElementById('bank-filter');
@@ -281,12 +457,30 @@ const confirmMatchUrl = appWrapper?.dataset.confirmUrl || '';
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 const diffThreshold = Number(appWrapper?.dataset.diffThreshold || 1);
 const shortageThreshold = Number(appWrapper?.dataset.shortageThreshold || diffThreshold);
-const creditLimit = Number(appWrapper?.dataset.creditLimit || 500);
+let creditLimit = Number(appWrapper?.dataset.creditLimit || 0);
+const hasCreditLimit = Number.isFinite(creditLimit) && creditLimit > 0;
+if (!hasCreditLimit) {
+  creditLimit = Infinity;
+}
 const DEFAULT_PANEL_VIEW = 'dashboard';
 const initialPanelView = appWrapper?.dataset.initialView || DEFAULT_PANEL_VIEW;
+const canManageBilling = appWrapper?.dataset.canManageBilling === '1';
 
 let trendChart = null;
 let currentTrendRange = 7;
+let modalBackdrop = null;
+
+const viewAllAlertsBtn = document.getElementById('view-all-alerts');
+if (viewAllAlertsBtn) {
+  viewAllAlertsBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    switchView('matching');
+    const matchingSection = document.querySelector('[data-view="matching"]');
+    if (matchingSection) {
+      matchingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('es-BO', {
@@ -510,6 +704,10 @@ function updateViewUrl(href, target) {
 function populateFilters() {
   const reconciliationSelect = document.getElementById('reconciliation-bank');
 
+  if (!bankFilter && !reconciliationSelect) {
+    return;
+  }
+
   if (bankFilter) {
     [...bankFilter.querySelectorAll('option[data-dynamic]')].forEach((option) => option.remove());
   }
@@ -542,14 +740,24 @@ function updateDashboard() {
   const suggested = state.transactions.filter((tx) => tx.status === 'suggested').length;
   const flagged = state.transactions.filter((tx) => tx.status === 'flagged').length;
 
-  document.getElementById('pending-count').textContent = pending;
-  document.getElementById('suggested-count').textContent = suggested;
-  document.getElementById('matched-count').textContent = state.reconciliations.length;
-  document.getElementById('alerts-count').textContent = flagged;
-  document.getElementById('transaction-count').textContent = pending + suggested + flagged;
+  const pendingEl = document.getElementById('pending-count');
+  const suggestedEl = document.getElementById('suggested-count');
+  const matchedEl = document.getElementById('matched-count');
+  const alertsEl = document.getElementById('alerts-count');
+  const transactionEl = document.getElementById('transaction-count');
+
+  if (pendingEl) pendingEl.textContent = pending;
+  if (suggestedEl) suggestedEl.textContent = suggested;
+  if (matchedEl) matchedEl.textContent = state.reconciliations.length;
+  if (alertsEl) alertsEl.textContent = flagged;
+  if (transactionEl) transactionEl.textContent = pending + suggested + flagged;
 }
 
 function renderAlerts() {
+  if (!alertList || !alertEmpty) {
+    return;
+  }
+
   const alerts = state.transactions.filter((tx) => tx.alert);
   alertList.innerHTML = '';
 
@@ -563,11 +771,12 @@ function renderAlerts() {
   alertList.classList.remove('d-none');
 
   alerts.forEach((tx) => {
+    const studentName = getStudentName(tx);
     const item = document.createElement('li');
     item.className = 'alert-item';
     item.innerHTML = `
       <div>
-        <strong>${tx.student}</strong>
+        <strong>${studentName}</strong>
         <p>${tx.alert}</p>
       </div>
       <span>${formatCurrency(tx.amount)}</span>
@@ -577,17 +786,22 @@ function renderAlerts() {
 }
 
 function renderTransactionList() {
+  if (!transactionList) {
+    return;
+  }
+
   const selectedBank = bankFilter ? bankFilter.value : '';
   const selectedStatus = statusFilter ? statusFilter.value : '';
   const query = ((globalSearch && globalSearch.value) || '').toLowerCase();
 
   const filtered = state.transactions.filter((tx) => {
+    const studentName = getStudentName(tx).toLowerCase();
     const matchBank = !selectedBank || tx.bankId === selectedBank;
     const matchStatus = selectedStatus ? tx.status === selectedStatus : true;
     const matchQuery = !query ||
-      tx.student.toLowerCase().includes(query) ||
-      tx.enrollment.includes(query) ||
-      tx.id.includes(query) ||
+      studentName.includes(query) ||
+      (tx.enrollment || '').toLowerCase().includes(query) ||
+      (tx.id || '').toLowerCase().includes(query) ||
       tx.reference.toLowerCase().includes(query);
     return matchBank && matchStatus && matchQuery;
   });
@@ -600,6 +814,7 @@ function renderTransactionList() {
   }
 
   filtered.forEach((tx) => {
+    const studentName = getStudentName(tx);
     const item = document.createElement('article');
     item.className = 'list-item';
     item.dataset.id = tx.id;
@@ -610,12 +825,12 @@ function renderTransactionList() {
     item.innerHTML = `
       <div class="list-meta">
         <span>${formatDate(tx.date)} · ${formatTime(tx.date)}</span>
-        <span>${getBankName(tx.bankId)}</span>
+        <span>${tx.bankName || getBankName(tx.bankId) || 'Sin banco'}</span>
       </div>
       <strong>${formatCurrency(tx.amount)}</strong>
       <div class="list-meta">
-        <span>${tx.student} · ${tx.enrollment}</span>
-        <span class="badge ${tx.status}">${tx.status}</span>
+        <span>${studentName} · ${tx.enrollment}</span>
+        <span class="badge ${getStatusBadgeClass(tx.status)}">${formatStatus(tx.status)}</span>
       </div>
     `;
 
@@ -650,23 +865,35 @@ function getVoucherSuggestions(transaction) {
         (sameOperation ? 3 : 0);
       return { voucher, score, amountDifference };
     })
-    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || a.amountDifference - b.amountDifference)
-    .map((item) => ({ ...item.voucher, rank: item.score }));
+    .map((item) => ({
+      ...item.voucher,
+      rank: item.score,
+      amountDifference: item.amountDifference,
+    }));
 }
 
 function renderVoucherList() {
+  if (!voucherList) {
+    return;
+  }
+
   voucherList.innerHTML = '';
   const transaction = state.transactions.find((tx) => tx.id === state.ui.selectedTransaction);
+  const voucherCountLabel = document.getElementById('voucher-count');
 
   if (!transaction) {
-    document.getElementById('voucher-count').textContent = 0;
+    if (voucherCountLabel) {
+      voucherCountLabel.textContent = 0;
+    }
     voucherList.innerHTML = '<div class="empty-state" data-empty="voucher">Selecciona una transacción para ver sugerencias.</div>';
     return;
   }
 
   const suggestions = getVoucherSuggestions(transaction);
-  document.getElementById('voucher-count').textContent = suggestions.length;
+  if (voucherCountLabel) {
+    voucherCountLabel.textContent = suggestions.length;
+  }
 
   if (!suggestions.length) {
     voucherList.innerHTML = '<div class="empty-state">No hay vouchers compatibles. Revisa manualmente.</div>';
@@ -674,6 +901,8 @@ function renderVoucherList() {
   }
 
   suggestions.forEach((voucher) => {
+    const studentName = getStudentName(voucher);
+    const voucherDate = voucher.paymentDate || voucher.issueDate;
     const item = document.createElement('article');
     item.className = 'list-item';
     item.dataset.id = voucher.id;
@@ -684,11 +913,11 @@ function renderVoucherList() {
     item.innerHTML = `
       <div class="list-meta">
         <span>${voucher.id}</span>
-        <span>${formatDate(voucher.issueDate)}</span>
+        <span>${voucherDate ? formatDate(voucherDate) : '—'}</span>
       </div>
       <strong>${formatCurrency(voucher.amount)}</strong>
       <div class="list-meta">
-        <span>${voucher.student} · ${voucher.enrollment}</span>
+        <span>${studentName} · ${voucher.enrollment}</span>
         <span class="badge suggested">Nivel ${voucher.rank}</span>
       </div>
     `;
@@ -704,6 +933,10 @@ function renderVoucherList() {
 }
 
 function renderMatchDetail() {
+  if (!matchDetail) {
+    return;
+  }
+
   matchDetail.innerHTML = '';
   const transaction = state.transactions.find((tx) => tx.id === state.ui.selectedTransaction);
   const voucher = state.vouchers.find((vc) => vc.id === state.ui.selectedVoucher);
@@ -713,20 +946,26 @@ function renderMatchDetail() {
     return;
   }
 
+  const transactionName = getStudentName(transaction);
+  const voucherName = getStudentName(voucher);
+  const transactionBank = transaction.bankName || getBankName(transaction.bankId) || 'Sin banco';
+  const voucherBank = voucher ? (voucher.bankName || getBankName(voucher.bankId) || 'Sin banco') : 'Sin banco';
+  const voucherDate = voucher ? (voucher.paymentDate || voucher.issueDate) : null;
+
   const txCard = document.createElement('div');
   txCard.className = 'detail-card';
   txCard.innerHTML = `
     <div class="detail-header">
       <h4>Transacción ${transaction.id}</h4>
-      <span class="badge ${transaction.status}">${transaction.status}</span>
+      <span class="badge ${getStatusBadgeClass(transaction.status)}">${formatStatus(transaction.status)}</span>
     </div>
     <div class="detail-grid">
       <div>
         <span class="detail-label">Estudiante</span>
-        <p class="detail-value">${transaction.student}</p>
+        <p class="detail-value">${transactionName}</p>
       </div>
       <div>
-        <span class="detail-label">Matrícula</span>
+        <span class="detail-label">Código</span>
         <p class="detail-value">${transaction.enrollment}</p>
       </div>
       <div>
@@ -735,15 +974,19 @@ function renderMatchDetail() {
       </div>
       <div>
         <span class="detail-label">Banco</span>
-        <p class="detail-value">${getBankName(transaction.bankId)}</p>
+        <p class="detail-value">${transactionBank}</p>
       </div>
       <div>
         <span class="detail-label">Fecha</span>
         <p class="detail-value">${formatDate(transaction.date)} · ${formatTime(transaction.date)}</p>
       </div>
       <div>
-        <span class="detail-label">Referencia</span>
+        <span class="detail-label">Detalle</span>
         <p class="detail-value">${transaction.reference}</p>
+      </div>
+      <div>
+        <span class="detail-label">N.º operación</span>
+        <p class="detail-value">${transaction.operation_number || '—'}</p>
       </div>
     </div>
   `;
@@ -758,7 +1001,7 @@ function renderMatchDetail() {
   }
 
   const difference = Number((transaction.amount - voucher.amount).toFixed(2));
-  const creditAllowed = difference > 0 && difference >= diffThreshold && difference <= creditLimit;
+  const hasOverpayment = difference > 0;
   const shortage = difference < 0 && Math.abs(difference) >= shortageThreshold;
 
   const voucherCard = document.createElement('div');
@@ -771,10 +1014,10 @@ function renderMatchDetail() {
     <div class="detail-grid">
       <div>
         <span class="detail-label">Estudiante</span>
-        <p class="detail-value">${voucher.student}</p>
+        <p class="detail-value">${voucherName}</p>
       </div>
       <div>
-        <span class="detail-label">Matrícula</span>
+        <span class="detail-label">Código</span>
         <p class="detail-value">${voucher.enrollment}</p>
       </div>
       <div>
@@ -782,16 +1025,16 @@ function renderMatchDetail() {
         <p class="detail-value">${formatCurrency(voucher.amount)}</p>
       </div>
       <div>
-        <span class="detail-label">Emitido</span>
-        <p class="detail-value">${formatDate(voucher.issueDate)}</p>
-      </div>
-      <div>
-        <span class="detail-label">Vence</span>
-        <p class="detail-value">${formatDate(voucher.dueDate)}</p>
+        <span class="detail-label">Fecha de pago</span>
+        <p class="detail-value">${voucherDate ? formatDate(voucherDate) : '—'}</p>
       </div>
       <div>
         <span class="detail-label">Banco</span>
-        <p class="detail-value">${getBankName(voucher.bankId)}</p>
+        <p class="detail-value">${voucherBank}</p>
+      </div>
+      <div>
+        <span class="detail-label">N.º operación</span>
+        <p class="detail-value">${voucher.operation_number || '—'}</p>
       </div>
     </div>
     <div class="mt-3">
@@ -816,17 +1059,13 @@ function renderMatchDetail() {
   actionCard.className = 'detail-card';
   actionCard.innerHTML = `
     <p class="mb-3">
-      ${creditAllowed
-        ? `Hay un excedente de ${formatCurrency(difference)}. Puedes confirmar y dejar el saldo como crédito.`
-        : 'Revisa la información para confirmar, rechazar o aplicar la acción correspondiente.'}
+      ${hasOverpayment
+        ? `Hay un excedente de ${formatCurrency(difference)}. Puedes registrarlo como demasía para acreditarlo al estudiante.`
+        : 'Revisa la información para confirmar o rechazar la conciliación.'}
     </p>
     <div class="btn-group btn-group-sm flex-wrap" role="group">
       <button class="btn btn-outline-danger" id="reject-match">Rechazar</button>
-      ${
-        creditAllowed
-          ? '<button class="btn btn-outline-warning" id="credit-match">Registrar crédito</button>'
-          : ''
-      }
+      ${hasOverpayment ? '<button class="btn btn-outline-warning" id="overpay-match">Marcar demasía</button>' : ''}
       <button class="btn btn-brand" id="open-modal">Confirmar coincidencia</button>
     </div>
   `;
@@ -837,32 +1076,70 @@ function renderMatchDetail() {
     rejectBtn.addEventListener('click', () => rejectMatch());
   }
 
-  const creditBtn = actionCard.querySelector('#credit-match');
-  if (creditBtn) {
-    creditBtn.addEventListener('click', () => creditMatch(difference));
+  const overpayBtn = actionCard.querySelector('#overpay-match');
+  if (overpayBtn) {
+    overpayBtn.addEventListener('click', () => creditMatch(difference));
   }
 
   actionCard.querySelector('#open-modal').addEventListener('click', () => openModal(transaction, voucher));
 }
 
 function openModal(transaction, voucher) {
+  const transactionName = getStudentName(transaction);
+  const voucherName = getStudentName(voucher);
   modalBody.innerHTML = `
     <div>
       <h4>Transacción</h4>
-      <p><strong>${transaction.student}</strong> · ${transaction.enrollment}</p>
+      <p><strong>${transactionName}</strong> · ${transaction.enrollment}</p>
       <p>${formatCurrency(transaction.amount)} · ${formatDate(transaction.date)}</p>
+      <p><small class="text-muted">N.º operación: ${transaction.operation_number || '—'}</small></p>
     </div>
     <div>
       <h4>Voucher</h4>
-      <p><strong>${voucher.student}</strong> · ${voucher.enrollment}</p>
-      <p>${formatCurrency(voucher.amount)} · ${formatDate(voucher.issueDate)}</p>
+      <p><strong>${voucherName}</strong> · ${voucher.enrollment}</p>
+      <p>${formatCurrency(voucher.amount)} · ${formatDate(voucher.paymentDate || voucher.issueDate)}</p>
+      <p><small class="text-muted">N.º operación: ${voucher.operation_number || '—'}</small></p>
     </div>
   `;
-  modal.classList.remove('d-none');
+  showModal();
 }
 
 function closeModal() {
-  modal.classList.add('d-none');
+  hideModal();
+}
+
+function showModal() {
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.add('show');
+  modal.style.display = 'block';
+  modal.removeAttribute('aria-hidden');
+  modal.setAttribute('aria-modal', 'true');
+  modal.scrollTop = 0;
+
+  if (!modalBackdrop) {
+    modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'modal-backdrop fade show';
+    document.body.appendChild(modalBackdrop);
+  }
+}
+
+function hideModal() {
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.remove('show');
+  modal.style.display = 'none';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.removeAttribute('aria-modal');
+
+  if (modalBackdrop) {
+    modalBackdrop.remove();
+    modalBackdrop = null;
+  }
 }
 
 function confirmMatch() {
@@ -879,19 +1156,9 @@ function rejectMatch() {
 }
 
 function creditMatch(defaultAmount) {
-  if (defaultAmount <= 0) {
-    showToast('No existe excedente para acreditar.');
-    return;
-  }
-
-  const value = prompt('Monto a acreditar a favor del estudiante', defaultAmount.toFixed(2));
-  if (value === null) {
-    return;
-  }
-
-  const creditAmount = Number(value);
+  const creditAmount = Number(defaultAmount);
   if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
-    showToast('Monto inválido para crédito.');
+    showToast('No existe excedente para acreditar.');
     return;
   }
 
@@ -971,32 +1238,46 @@ function applyMatchResult(data) {
       state.vouchers = state.vouchers.filter(
         (voucher) => voucher.db_id !== data.voucher.db_id && voucher.id !== data.voucher.id
       );
+
+      updateRecentVoucherStatus(
+        extractVoucherDbId(data.voucher),
+        'rechazado',
+        data.voucher?.reason || 'Rechazado en conciliación'
+      );
     }
   } else {
     if (data.transaction) {
-      const txIndex = state.transactions.findIndex(
-        (tx) => tx.db_id === data.transaction.db_id || tx.id === data.transaction.id
+      state.transactions = state.transactions.filter(
+        (tx) => tx.db_id !== data.transaction.db_id && tx.id !== data.transaction.id
       );
-
-      if (txIndex !== -1) {
-        state.transactions[txIndex] = {
-          ...state.transactions[txIndex],
-          status: data.transaction.status || 'matched',
-          student: data.transaction.student || state.transactions[txIndex].student,
-          enrollment: data.transaction.enrollment || state.transactions[txIndex].enrollment,
-          alert: null,
-        };
-      }
     }
 
     if (data.voucher) {
       state.vouchers = state.vouchers.filter(
         (voucher) => voucher.db_id !== data.voucher.db_id && voucher.id !== data.voucher.id
       );
+
+      const newStatus = action === 'credit' ? 'demasia' : 'conciliado';
+      const reason =
+        action === 'credit'
+          ? data.voucher?.reason || 'Pago en demasía'
+          : action === 'reject'
+            ? (data.voucher?.reason || '')
+            : '';
+      updateRecentVoucherStatus(extractVoucherDbId(data.voucher), newStatus, reason);
     }
 
     if (data.reconciliation) {
-      state.reconciliations.unshift(data.reconciliation);
+      const reconciliation = {
+        ...data.reconciliation,
+      };
+      if (!reconciliation.student_name && reconciliation.student) {
+        reconciliation.student_name = reconciliation.student;
+      }
+      if (reconciliation.status) {
+        reconciliation.status = reconciliation.status.toLowerCase();
+      }
+      state.reconciliations.unshift(reconciliation);
     }
   }
 
@@ -1015,42 +1296,53 @@ function applyMatchResult(data) {
 }
 
 function renderReconciliations() {
+  if (!reconciliationTable) {
+    return;
+  }
+
   reconciliationTable.innerHTML = '';
   state.reconciliations.forEach((item) => {
+    const studentName = getStudentName(item);
+    const statusClass = getStatusBadgeClass(item.status);
+    const billingStatus = item.billing_status || 'pendiente';
+    const billingClass = getStatusBadgeClass(billingStatus);
     const row = document.createElement('tr');
+    let billingCell = `<span class="badge ${billingClass}">${formatStatus(billingStatus)}</span>`;
+
     row.innerHTML = `
       <td>${formatDate(item.date)}</td>
       <td>${getBankName(item.bankId)}</td>
-      <td>${item.student}</td>
+      <td>${studentName}</td>
       <td>${formatCurrency(item.amount)}</td>
-      <td>${item.voucherId}</td>
-      <td><span class="badge matched">${item.status}</span></td>
+      <td>${billingCell}</td>
+      <td><span class="badge ${statusClass}">${formatStatus(item.status)}</span></td>
     `;
     reconciliationTable.appendChild(row);
   });
 }
 
 function renderStudents() {
+  if (!studentTable) {
+    return;
+  }
+
   studentTable.innerHTML = '';
   const query = (document.getElementById('student-search').value || '').toLowerCase();
-  const status = document.getElementById('student-status').value;
 
   state.students
     .filter((student) => {
-      const matchStatus = !status || student.status === status;
-      const matchQuery = !query ||
-        student.name.toLowerCase().includes(query) ||
-        student.enrollment.includes(query);
-      return matchStatus && matchQuery;
+      if (!query) {
+        return true;
+      }
+      return student.name.toLowerCase().includes(query) ||
+        (student.enrollment || '').toLowerCase().includes(query);
     })
     .forEach((student) => {
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${student.name}</td>
         <td>${student.enrollment}</td>
-        <td>${student.program}</td>
         <td>${formatDate(student.lastPayment)}</td>
-        <td><span class="badge ${student.status}">${student.status}</span></td>
       `;
       studentTable.appendChild(row);
     });
@@ -1083,7 +1375,7 @@ function renderBanks() {
 }
 
 function initNavigation() {
-  if (!navLinks.length) {
+  if (!navLinks.length || !views.length) {
     return;
   }
 
@@ -1122,20 +1414,36 @@ function initFilters() {
     }
   }
   const studentSearch = document.getElementById('student-search');
-  const studentStatus = document.getElementById('student-status');
   if (studentSearch) {
     studentSearch.addEventListener('input', renderStudents);
-  }
-  if (studentStatus) {
-    studentStatus.addEventListener('change', renderStudents);
   }
 }
 
 function initModal() {
-  document.querySelectorAll('[data-close-modal]').forEach((btn) => btn.addEventListener('click', closeModal));
-  confirmMatchBtn.addEventListener('click', confirmMatch);
+  if (!modal) {
+    return;
+  }
+
+  const closeTriggers = modal.querySelectorAll('[data-dismiss="modal"], [data-close-modal]');
+  closeTriggers.forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+  });
+
+  if (confirmMatchBtn) {
+    confirmMatchBtn.addEventListener('click', confirmMatch);
+  }
+
   modal.addEventListener('click', (event) => {
     if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modal.classList.contains('show')) {
       closeModal();
     }
   });

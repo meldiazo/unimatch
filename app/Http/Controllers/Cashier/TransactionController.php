@@ -23,6 +23,7 @@ class TransactionController extends Controller
             'query' => ['nullable', 'string', 'max:80'],
             'bank_id' => ['nullable', 'exists:banks,id'],
             'status' => ['nullable', 'in:recibido,validado,demasia,rechazado,conciliado'],
+            'billing_status' => ['nullable', 'in:pendiente,facturado'],
             'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
         ]);
 
@@ -30,13 +31,14 @@ class TransactionController extends Controller
             ->latest('paid_at');
 
         if ($validated['query'] ?? null) {
-            $search = $validated['query'];
-            $query->where(function ($q) use ($search) {
-                $q->whereHas('student', fn($sq) => 
-                    $sq->where('full_name', 'like', "%$search%")
-                      ->orWhere('code', 'like', "%$search%")
-                )
-                ->orWhere('operation_number', 'like', "%$search%");
+            $search = mb_strtolower($validated['query']);
+            $like = "%{$search}%";
+            $query->where(function ($q) use ($like) {
+                $q->whereHas('student', function ($sq) use ($like) {
+                    $sq->whereRaw('LOWER(full_name) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(code) LIKE ?', [$like]);
+                })
+                ->orWhereRaw('LOWER(operation_number) LIKE ?', [$like]);
             });
         }
 
@@ -46,6 +48,10 @@ class TransactionController extends Controller
 
         if ($validated['status'] ?? null) {
             $query->where('status', $validated['status']);
+        }
+
+        if ($validated['billing_status'] ?? null) {
+            $query->where('billing_status', $validated['billing_status']);
         }
 
         return $query->paginate($validated['per_page'] ?? 20)

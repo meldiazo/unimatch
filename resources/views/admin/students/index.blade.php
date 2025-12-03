@@ -31,7 +31,6 @@
               <tr>
                 <th>Código</th>
                 <th>Nombre</th>
-                <th>Programa</th>
                 <th>Correo</th>
                 <th>Documento</th>
                 <th class="text-right">Acciones</th>
@@ -42,7 +41,6 @@
                 <tr>
                   <td>{{ $student->code }}</td>
                   <td>{{ $student->full_name }}</td>
-                  <td>{{ $student->program ?? '—' }}</td>
                   <td>{{ $student->email ?? '—' }}</td>
                   <td>{{ $student->meta['document'] ?? '—' }}</td>
                   <td class="text-right">
@@ -56,7 +54,7 @@
                 </tr>
               @empty
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">No hay estudiantes registrados.</td>
+                  <td colspan="5" class="text-center text-muted py-4">No hay estudiantes registrados.</td>
                 </tr>
               @endforelse
             </tbody>

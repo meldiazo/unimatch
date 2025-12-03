@@ -33,7 +33,7 @@ class BankStatementLine extends Model
 
     public function statement()
     {
-        return $this->belongsTo(BankStatement::class);
+        return $this->belongsTo(BankStatement::class, 'bank_statement_id');
     }
 
     public function transaction()

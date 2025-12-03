@@ -11,6 +11,9 @@
           ->map(fn ($part) => mb_substr($part, 0, 1))
           ->take(2)
           ->implode('');
+      $availableViews = ['vouchers', 'balance'];
+      $requestedView = request()->query('view');
+      $activeView = in_array($requestedView, $availableViews, true) ? $requestedView : 'vouchers';
   @endphp
 
   <div class="wrapper">
@@ -50,13 +53,13 @@
         <nav>
           <ul class="nav nav-pills nav-sidebar flex-column">
             <li class="nav-item">
-              <a href="#" class="nav-link active">
+              <a href="{{ route('dashboard') }}" class="nav-link {{ $activeView === 'vouchers' ? 'active' : '' }}">
                 <i class="nav-icon fas fa-receipt"></i>
                 <p>Mis vouchers</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="#balance-card" class="nav-link">
+              <a href="{{ route('dashboard', ['view' => 'balance']) }}" class="nav-link {{ $activeView === 'balance' ? 'active' : '' }}">
                 <i class="nav-icon fas fa-wallet"></i>
                 <p>Saldos a favor</p>
               </a>
@@ -71,8 +74,12 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6">
-              <h1 class="m-0">Mis pagos y comprobantes</h1>
-              <small class="text-muted">Sube tus vouchers y monitorea su estado.</small>
+              <h1 class="m-0">
+                {{ $activeView === 'balance' ? 'Saldo a favor' : 'Mis pagos y comprobantes' }}
+              </h1>
+              <small class="text-muted">
+                {{ $activeView === 'balance' ? 'Consulta los créditos disponibles y sus movimientos.' : 'Sube tus vouchers y monitorea su estado.' }}
+              </small>
             </div>
           </div>
         </div>
@@ -89,55 +96,56 @@
             </div>
           @endif
 
-          <div class="card card-outline card-brand mb-4" id="balance-card">
-          <div class="card-header bg-gradient-info">
-            <h3 class="card-title mb-0"><i class="fas fa-wallet mr-2"></i>Saldo a favor</h3>
-          </div>
-          <div class="card-body">
-            <div class="row">
-              <div class="col-md-6">
-                <div class="info-box bg-light">
-                  <span class="info-box-icon bg-info"><i class="fas fa-money-bill-wave"></i></span>
-                  <div class="info-box-content">
-                    <span class="info-box-text">Saldo disponible</span>
-                    <span class="info-box-number" id="balance-amount">Bs 0.00</span>
+          @if ($activeView === 'balance')
+            <div class="card card-outline card-brand mb-4" id="balance-card">
+              <div class="card-header bg-gradient-info">
+                <h3 class="card-title mb-0"><i class="fas fa-wallet mr-2"></i>Saldo a favor</h3>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="info-box bg-light">
+                      <span class="info-box-icon bg-info"><i class="fas fa-money-bill-wave"></i></span>
+                      <div class="info-box-content">
+                        <span class="info-box-text">Saldo disponible</span>
+                        <span class="info-box-number" id="balance-amount">Bs 0.00</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="info-box bg-light">
+                      <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                      <div class="info-box-content">
+                        <span class="info-box-text">Última actualización</span>
+                        <span class="info-box-number text-sm" id="balance-updated">Cargando...</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div class="col-md-6">
-                <div class="info-box bg-light">
-                  <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
-                  <div class="info-box-content">
-                    <span class="info-box-text">Última actualización</span>
-                    <span class="info-box-number text-sm" id="balance-updated">Cargando...</span>
-                  </div>
+
+                <hr>
+
+                <h5>Movimientos recientes</h5>
+                <div class="table-responsive">
+                  <table class="table table-sm table-hover">
+                    <thead class="thead-light">
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Descripción</th>
+                        <th class="text-right">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody id="balance-movements">
+                      <tr>
+                        <td colspan="3" class="text-center text-muted py-3">Cargando movimientos...</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
-
-            <hr>
-
-            <h5>Movimientos recientes</h5>
-            <div class="table-responsive">
-              <table class="table table-sm table-hover">
-                <thead class="thead-light">
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Descripción</th>
-                    <th class="text-right">Monto</th>
-                  </tr>
-                </thead>
-                <tbody id="balance-movements">
-                  <tr>
-                    <td colspan="3" class="text-center text-muted py-3">Cargando movimientos...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-          <div class="card card-outline card-brand mb-4">
+          @else
+            <div class="card card-outline card-brand mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
               <h3 class="card-title mb-0"><i class="fas fa-upload mr-2"></i>Subir nuevo voucher</h3>
               <span class="badge badge-info">Adjunta PDF o imagen</span>
@@ -212,7 +220,14 @@
                   <div class="form-row">
                     <div class="form-group col-md-4">
                       <label for="student-payment-type">Tipo de pago</label>
-                      <input type="text" name="payment_type" id="student-payment-type" class="form-control @error('payment_type') is-invalid @enderror" value="{{ old('payment_type', 'Transferencia') }}" required>
+                      @php
+                        $studentPaymentType = old('payment_type', 'Transferencia');
+                      @endphp
+                      <select name="payment_type" id="student-payment-type" class="form-control @error('payment_type') is-invalid @enderror" required>
+                        <option value="Transferencia" {{ $studentPaymentType === 'Transferencia' ? 'selected' : '' }}>Transferencia</option>
+                        <option value="Depósito" {{ $studentPaymentType === 'Depósito' ? 'selected' : '' }}>Depósito</option>
+                        <option value="QR" {{ $studentPaymentType === 'QR' ? 'selected' : '' }}>QR</option>
+                      </select>
                       @error('payment_type')
                         <div class="invalid-feedback">{{ $message }}</div>
                       @enderror
@@ -223,16 +238,6 @@
                       @error('operation_number')
                         <div class="invalid-feedback">{{ $message }}</div>
                       @enderror
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group col-md-4">
-                      <label for="student-account">Referencia de cuenta (opcional)</label>
-                      <input type="text" name="account_reference" id="student-account" class="form-control @error('account_reference') is-invalid @enderror" value="{{ old('account_reference') }}" placeholder="Ej: Caja central">
-                      @error('account_reference')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
                   </div>
                   <div class="form-group">
                     <label for="student-file">Comprobante (.pdf, .jpg, .png)</label>
@@ -260,8 +265,7 @@
                     <th>Monto</th>
                     <th>Estado</th>
                     <th>Comprobante</th>
-                    <th>Acciones</th>
-                  </tr>
+                </tr>
                 </thead>
                 <tbody>
                   @forelse ($studentVouchers as $voucher)
@@ -270,8 +274,18 @@
                       <td>{{ $voucher->bank->name ?? '—' }}</td>
                       <td>Bs {{ number_format($voucher->amount, 2, ',', '.') }}</td>
                       <td>
-                        <span class="badge {{ $voucher->status === 'recibido' ? 'badge-info' : 'badge-success' }}">
-                          {{ ucfirst($voucher->status) }}
+                        @php
+                          $studentStatus = strtolower($voucher->status);
+                          $statusPills = [
+                            'recibido' => 'info',
+                            'conciliado' => 'success',
+                            'rechazado' => 'danger',
+                            'demasia' => 'warning',
+                          ];
+                          $studentBadge = $statusPills[$studentStatus] ?? 'secondary';
+                        @endphp
+                        <span class="badge badge-{{ $studentBadge }}">
+                          {{ ucfirst($studentStatus) }}
                         </span>
                         @if ($voucher->reason)
                           <small class="d-block text-muted mt-1">{{ $voucher->reason }}</small>
@@ -284,50 +298,11 @@
                           <span class="text-muted">Sin archivo</span>
                         @endif
                       </td>
-                      <td>
-                        @if ($voucher->status === 'rechazado')
-                          <button type="button" class="btn btn-warning btn-sm" data-toggle="modal" data-target="#replaceModal{{ $voucher->id }}">
-                            <i class="fas fa-redo"></i> Reemplazar
-                          </button>
-                          
-                          <!-- Modal para reemplazar -->
-                          <div class="modal fade" id="replaceModal{{ $voucher->id }}" tabindex="-1">
-                            <div class="modal-dialog">
-                              <div class="modal-content">
-                                <div class="modal-header">
-                                  <h5 class="modal-title">Reemplazar voucher rechazado</h5>
-                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
-                                </div>
-                                <form action="{{ route('student.vouchers.replace', $voucher) }}" method="POST" enctype="multipart/form-data">
-                                  @csrf
-                                  @method('PATCH')
-                                  <div class="modal-body">
-                                    <div class="alert alert-info">
-                                      <strong>Motivo del rechazo:</strong> {{ $voucher->reason ?? 'No especificado' }}
-                                    </div>
-                                    <div class="form-group">
-                                      <label for="file{{ $voucher->id }}">Nuevo comprobante (PDF, JPG, PNG)</label>
-                                      <input type="file" name="voucher_file" id="file{{ $voucher->id }}" class="form-control-file" required>
-                                    </div>
-                                    <div class="form-group">
-                                      <label for="notes{{ $voucher->id }}">Notas (opcional)</label>
-                                      <textarea name="notes" id="notes{{ $voucher->id }}" class="form-control" rows="2" placeholder="Explica qué cambios realizaste..."></textarea>
-                                    </div>
-                                  </div>
-                                  <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                                    <button type="submit" class="btn btn-brand">Enviar nuevo comprobante</button>
-                                  </div>
-                                </form>
-                              </div>
-                            </div>
-                          </div>
-                        @endif
-                      </td>
+                      
                     </tr>
                   @empty
                     <tr>
-                      <td colspan="6" class="text-center text-muted py-4">
+                      <td colspan="5" class="text-center text-muted py-4">
                         Aún no registraste vouchers.
                       </td>
                     </tr>
@@ -336,6 +311,7 @@
               </table>
             </div>
           </div>
+          @endif
         </div>
       </section>
     </div>
@@ -434,8 +410,23 @@
   };
 
   document.addEventListener('DOMContentLoaded', () => {
-    setupStudentAccounts();
-    loadStudentBalance();
+    document.querySelectorAll('.alert.alert-dismissible .close').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        const alert = btn.closest('.alert');
+        if (alert) {
+          alert.classList.remove('show');
+          alert.addEventListener('transitionend', () => alert.remove(), { once: true });
+          setTimeout(() => alert.remove(), 200);
+        }
+      });
+    });
+
+    @if ($activeView === 'balance')
+      loadStudentBalance();
+    @else
+      setupStudentAccounts();
+    @endif
   });
 </script>
 @endpush

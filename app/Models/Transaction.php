@@ -17,6 +17,7 @@ class Transaction extends Model
         'matched_by',
         'matched_at',
         'difference_amount',
+        'student_id',
     ];
 
     protected $casts = [

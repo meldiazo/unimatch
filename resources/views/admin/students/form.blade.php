@@ -41,21 +41,14 @@
             </div>
 
             <div class="form-row">
-              <div class="form-group col-md-4">
-                <label for="program">Programa</label>
-                <input type="text" name="program" id="program" class="form-control @error('program') is-invalid @enderror" value="{{ old('program', $student->program) }}">
-                @error('program')
-                  <div class="invalid-feedback">{{ $message }}</div>
-                @enderror
-              </div>
-              <div class="form-group col-md-4">
+              <div class="form-group col-md-6">
                 <label for="email">Correo electrónico</label>
                 <input type="email" name="email" id="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $student->email) }}">
                 @error('email')
                   <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
               </div>
-              <div class="form-group col-md-4">
+              <div class="form-group col-md-6">
                 <label for="document">Documento (NIT/CI)</label>
                 <input type="text" name="document" id="document" class="form-control @error('document') is-invalid @enderror" value="{{ old('document', $student->meta['document'] ?? '') }}">
                 @error('document')

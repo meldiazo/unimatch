@@ -8,12 +8,14 @@ use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Import\BankStatementImportController;
 use App\Http\Controllers\Import\VoucherImportController;
 use App\Http\Controllers\Income\MatchingController;
-use App\Http\Controllers\Import\BillingStatusImportController;
 use App\Http\Controllers\Income\VoucherController as IncomeVoucherController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\Student\VoucherController as StudentVoucherController;
 use App\Http\Controllers\Cashier\TransactionController as CashierTransactionController;
+use App\Http\Controllers\Cashier\BillingStatusController;
+use App\Http\Controllers\Admin\ReconciliationReviewController;
+use App\Http\Middleware\CheckRole;
 use App\Models\Bank;
 use App\Models\PaymentVoucher;
 use App\Models\Student;
@@ -35,14 +37,18 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
     });
 
     // ========== RUTAS CAJERO ==========
-    Route::middleware(['role:cajero'])->group(function () {
+    Route::middleware([CheckRole::class.':cajero'])->group(function () {
         Route::get('/api/cashier/transactions/search', [
             CashierTransactionController::class, 'search'
         ])->name('api.cashier.transactions.search');
-        
+
         Route::get('/cashier/vouchers/{voucher}/certificate', [
             \App\Http\Controllers\Cashier\VoucherController::class, 'downloadCertificate'
         ])->name('cashier.vouchers.certificate');
+
+        Route::patch('/cajero/vouchers/{voucher}/billing', [
+            BillingStatusController::class, 'update'
+        ])->name('cajero.billing.update');
     });
 
     // ========== RUTAS ESTUDIANTE ==========
@@ -72,7 +78,6 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
                 $students = Student::orderBy('full_name')->get();
                 $recentVouchers = PaymentVoucher::with(['student', 'bankAccount.bank'])
                     ->latest()
-                    ->take(10)
                     ->get();
 
                 $matchingData = app(MatchingDataBuilder::class)->build($banks, $students);
@@ -86,13 +91,29 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
                     'reconciliationSettings' => $reconciliationSettings,
                     'statusOptions' => [
                         'recibido' => 'Recibido',
-                        'validado' => 'Validado',
+                        'conciliado' => 'Conciliado',
                         'demasia' => 'Pago en demasía',
                         'rechazado' => 'Rechazado',
                     ],
                 ]);
             })(),
-            User::ROLE_CAJERO => view('dashboards.cajero'),
+            User::ROLE_CAJERO => (function () {
+                $banks = \App\Models\Bank::orderBy('name')->get();
+                $facturacionVouchers = PaymentVoucher::with(['student', 'bank'])
+                    ->whereIn('status', ['conciliado', 'demasia'])
+                    ->latest('paid_at')
+                    ->take(50)
+                    ->get();
+
+                return view('dashboards.cajero', [
+                    'banks' => $banks,
+                    'facturacionVouchers' => $facturacionVouchers,
+                    'billingOptions' => [
+                        'pendiente' => 'Pendiente',
+                        'facturado' => 'Facturado',
+                    ],
+                ]);
+            })(),
             default => view('dashboards.estudiante', [
                 'banks' => Bank::with('accounts')->get(),
                 'studentRecord' => $studentRecord,
@@ -115,8 +136,6 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
 
     Route::post('/ingresos/import/extractos', BankStatementImportController::class)
         ->name('imports.extracts');
-    Route::post('/ingresos/import/facturacion', BillingStatusImportController::class)
-        ->name('imports.billing');
     Route::post('/ingresos/import/vouchers', VoucherImportController::class)
         ->name('imports.vouchers');
 
@@ -129,9 +148,6 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
 
     Route::post('/estudiante/vouchers', [StudentVoucherController::class, 'store'])
         ->name('student.vouchers.store');
-
-    Route::patch('/estudiante/vouchers/{voucher}/replace', [StudentVoucherController::class, 'replace'])
-        ->name('student.vouchers.replace');
 
     Route::get('/api/student/balance', [\App\Http\Controllers\Student\BalanceController::class, 'show'])
         ->name('api.student.balance');
@@ -157,6 +173,7 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
 
         Route::get('settings/reconciliation', [ReconciliationSettingController::class, 'edit'])->name('settings.reconciliation.edit');
         Route::put('settings/reconciliation', [ReconciliationSettingController::class, 'update'])->name('settings.reconciliation.update');
+        Route::get('reconciliations', [ReconciliationReviewController::class, 'index'])->name('reconciliations.index');
         Route::get('banks/{bank}/format', [AdminBankController::class, 'editFormat'])->name('banks.format');
         Route::put('banks/{bank}/format', [AdminBankController::class, 'updateFormat'])->name('banks.format.update');
         Route::resource('banks', AdminBankController::class)->except(['show']);

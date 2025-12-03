@@ -8,9 +8,16 @@ use App\Models\Transaction;
 use App\Support\ReconciliationSettings;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MatchingDataBuilder
 {
+    /** @var array<string, \App\Models\Student> */
+    private array $studentsByCode = [];
+
+    /** @var array<string, \App\Models\Student> */
+    private array $studentsByEmail = [];
+
     /**
      * Build dataset consumed by the reconciliation UI.
      *
@@ -23,6 +30,15 @@ class MatchingDataBuilder
         $differenceThreshold = (float) $settings->difference_alert_threshold;
         $shortageThreshold = (float) $settings->shortage_alert_threshold;
 
+        $this->studentsByCode = $students
+            ->filter(fn ($student) => filled($student->code))
+            ->keyBy(fn ($student) => strtoupper(trim($student->code)))
+            ->all();
+        $this->studentsByEmail = $students
+            ->filter(fn ($student) => filled($student->email))
+            ->keyBy(fn ($student) => strtolower($student->email))
+            ->all();
+
         $bankList = $banks->map(function ($bank) {
             return [
                 'id' => (string) $bank->id,
@@ -32,7 +48,7 @@ class MatchingDataBuilder
         })->values();
 
         $voucherCandidates = PaymentVoucher::with('student')
-            ->where('status', '!=', 'conciliado')
+            ->whereNotIn('status', ['conciliado', 'demasia', 'rechazado'])
             ->latest('received_at')
             ->take(150)
             ->get();
@@ -45,6 +61,7 @@ class MatchingDataBuilder
             'statement.account.bank',
             'transaction.voucher.student',
         ])
+            ->whereDoesntHave('transaction')
             ->latest('operation_date')
             ->take(100)
             ->get()
@@ -53,6 +70,8 @@ class MatchingDataBuilder
                 $alert = null;
                 $suggestion = null;
                 $difference = 0;
+                $bank = optional($line->statement?->account?->bank);
+                $voucher = $line->transaction?->voucher;
 
                 if ($line->transaction) {
                     $status = $line->transaction->status ?? 'matched';
@@ -77,20 +96,32 @@ class MatchingDataBuilder
                     }
                 }
 
+                $studentName = $this->extractStudentName($voucher)
+                    ?? $this->extractStudentName($suggestion)
+                    ?? 'Por asignar';
+
+                $studentCode = $this->extractStudentCode($voucher)
+                    ?? $this->extractStudentCode($suggestion)
+                    ?? '—';
+
+                $detailText = $line->description
+                    ?? $line->reference
+                    ?? $line->operation_number
+                    ?? '—';
+
                 return [
                     'id' => 'tx-'.$line->id,
                     'db_id' => $line->id,
-                    'studentId' => $line->transaction?->voucher?->student_id
+                    'studentId' => $voucher?->student_id
                         ?? $suggestion?->student_id,
-                    'student' => $line->transaction?->voucher?->student?->full_name
-                        ?? $suggestion?->student?->full_name
-                        ?? 'Por asignar',
-                    'enrollment' => $line->transaction?->voucher?->student?->code
-                        ?? $suggestion?->student?->code
-                        ?? '—',
-                    'bankId' => optional($line->statement?->account?->bank)->id,
+                    'student' => $studentName,
+                    'student_name' => $studentName,
+                    'enrollment' => $studentCode,
+                    'student_code' => $studentCode,
+                    'bankId' => $bank->id ? (string) $bank->id : null,
+                    'bankName' => $bank->name,
                     'amount' => (float) $line->amount,
-                    'reference' => $line->reference ?? $line->operation_number ?? '—',
+                    'reference' => $detailText,
                     'date' => optional($line->operation_date)?->toDateTimeString()
                         ?? now()->toDateTimeString(),
                     'status' => $status,
@@ -99,23 +130,36 @@ class MatchingDataBuilder
                     'operation_number' => $line->operation_number,
                     'difference' => round($difference, 2),
                     'suggestedVoucherId' => $suggestion?->id,
+                    'billing_status' => $voucher?->billing_status
+                        ?? $suggestion?->billing_status
+                        ?? 'pendiente',
                 ];
             })
             ->values();
 
         $vouchers = $voucherCandidates->map(function (PaymentVoucher $voucher) {
+            $bank = optional($voucher->bankAccount?->bank ?? $voucher->bank);
+            $studentName = $this->extractStudentName($voucher) ?? 'Sin estudiante';
+            $studentCode = $this->extractStudentCode($voucher) ?? '—';
+            $paymentDate = optional($voucher->paid_at)?->toDateString() ?? now()->toDateString();
+
             return [
                 'id' => 'vc-'.$voucher->id,
                 'db_id' => $voucher->id,
                 'studentId' => $voucher->student_id,
-                'student' => $voucher->student?->full_name ?? 'Sin estudiante',
-                'enrollment' => $voucher->student?->code ?? '—',
+                'student' => $studentName,
+                'student_name' => $studentName,
+                'enrollment' => $studentCode,
+                'student_code' => $studentCode,
                 'amount' => (float) $voucher->amount,
-                'issueDate' => optional($voucher->paid_at)?->toDateString() ?? now()->toDateString(),
-                'dueDate' => optional($voucher->paid_at)?->toDateString() ?? now()->toDateString(),
+                'issueDate' => $paymentDate,
+                'dueDate' => null,
+                'paymentDate' => $paymentDate,
                 'status' => $voucher->status,
-                'bankId' => optional($voucher->bankAccount?->bank)->id,
+                'bankId' => $bank->id ? (string) $bank->id : null,
+                'bankName' => $bank->name,
                 'operation_number' => $voucher->operation_number,
+                'billing_status' => $voucher->billing_status ?? 'pendiente',
             ];
         })->values();
 
@@ -128,17 +172,23 @@ class MatchingDataBuilder
             ->get()
             ->map(function (Transaction $transaction) {
                 $line = $transaction->line;
+                $student = $transaction->voucher?->student;
+                $studentCode = $student?->code
+                    ?? ($transaction->voucher?->raw_payload['student_code'] ?? null);
 
                 return [
                     'id' => $transaction->id,
                     'transactionId' => $line?->id,
                     'voucherId' => $transaction->payment_voucher_id,
                     'bankId' => optional($line?->statement?->account?->bank)->id,
-                    'student' => $transaction->voucher?->student?->full_name ?? 'Sin estudiante',
+                    'student' => $student?->full_name ?? 'Sin estudiante',
+                    'student_name' => $student?->full_name ?? 'Sin estudiante',
+                    'student_code' => $studentCode,
                     'amount' => (float) ($line?->amount ?? $transaction->voucher?->amount ?? 0),
                     'date' => optional($transaction->matched_at ?? $line?->operation_date)?->toDateString()
                         ?? now()->toDateString(),
-                    'status' => ucfirst($transaction->status ?? 'matched'),
+                    'status' => strtolower($transaction->status ?? 'conciliado'),
+                    'billing_status' => $transaction->voucher?->billing_status ?? 'pendiente',
                 ];
             })
             ->values();
@@ -154,7 +204,6 @@ class MatchingDataBuilder
                 'id' => 'st-'.$student->id,
                 'name' => $student->full_name,
                 'enrollment' => $student->code,
-                'program' => $student->program ?? '—',
                 'lastPayment' => $lastPayment ?? optional($student->updated_at)?->toDateString() ?? now()->toDateString(),
                 'status' => 'pending',
             ];
@@ -167,5 +216,80 @@ class MatchingDataBuilder
             'reconciliations' => $latestReconciliations,
             'students' => $studentRows,
         ];
+    }
+
+    private function extractStudentName(?PaymentVoucher $voucher): ?string
+    {
+        if (! $voucher) {
+            return null;
+        }
+
+        if ($voucher->student?->full_name) {
+            return $voucher->student->full_name;
+        }
+
+        $identifier = $voucher->student?->code
+            ?? ($voucher->raw_payload['student_code'] ?? null);
+
+        if ($identifier) {
+            $student = $this->findStudentByIdentifier($identifier);
+            if ($student) {
+                return $student->full_name ?? $student->code;
+            }
+
+            if (str_contains($identifier, '@')) {
+                return Str::of($identifier)
+                    ->before('@')
+                    ->replace(['.', '_', '-'], ' ')
+                    ->title()
+                    ->trim()
+                    ->value() ?: $identifier;
+            }
+        }
+
+        return $voucher->student?->code ?? $identifier;
+    }
+
+    private function extractStudentCode(?PaymentVoucher $voucher): ?string
+    {
+        if (! $voucher) {
+            return null;
+        }
+
+        if ($voucher->student?->code) {
+            return $voucher->student->code;
+        }
+
+        $identifier = $voucher->raw_payload['student_code'] ?? null;
+        if ($identifier) {
+            $student = $this->findStudentByIdentifier($identifier);
+            if ($student) {
+                return $student->code;
+            }
+
+            return $identifier;
+        }
+
+        return null;
+    }
+
+    private function findStudentByIdentifier(?string $identifier)
+    {
+        if (! $identifier) {
+            return null;
+        }
+
+        $trimmed = trim((string) $identifier);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $codeKey = strtoupper($trimmed);
+        if (isset($this->studentsByCode[$codeKey])) {
+            return $this->studentsByCode[$codeKey];
+        }
+
+        $lower = strtolower($trimmed);
+        return $this->studentsByEmail[$lower] ?? null;
     }
 }

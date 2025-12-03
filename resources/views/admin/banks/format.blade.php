@@ -11,7 +11,6 @@
       </div>
       <div class="btn-group btn-group-sm">
         <a href="{{ route('admin.banks.index') }}" class="btn btn-default">Volver</a>
-        <a href="{{ route('admin.banks.edit', $bank) }}" class="btn btn-outline-brand">Configurar banco</a>
       </div>
     </div>
   </section>

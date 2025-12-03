@@ -73,7 +73,7 @@ class BankController extends Controller
             'bank_code' => 'Código del banco (ej. BNB)',
             'account_number' => 'Número de cuenta',
             'operation_number' => 'N° de operación',
-            'reference' => 'Referencia',
+            'reference' => 'Detalle (motivo del pago o descripción corta)',
             'description' => 'Descripción',
             'operation_date' => 'Fecha de operación',
             'value_date' => 'Fecha valor',

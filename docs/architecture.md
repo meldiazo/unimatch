@@ -7,7 +7,7 @@ Este documento resume la estructura de datos y los módulos prioritarios para la
 | Rol                    | Descripción                                       | Accesos principales                                                                                           |
 |------------------------|---------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
 | `jefe_contabilidad`    | Supervisión y gobierno del sistema                | Tablero ejecutivo, gestión de usuarios/roles, configuración de formatos bancarios, reportes globales         |
-| `encargado_ingresos`   | Operación diaria de ingresos                      | Carga de extractos, reportes de facturación y vouchers; conciliación y reportes operativos                    |
+| `encargado_ingresos`   | Operación diaria de ingresos                      | Carga de extractos y vouchers; conciliación y reportes operativos                                             |
 | `cajero`               | Consulta en ventanilla                            | Consulta solo lectura de transacciones/vouchers, descarga de comprobantes                                     |
 | `estudiante`           | Autogestión de comprobantes                       | Subir y actualizar vouchers, revisar estados, consultar saldo a favor                                         |
 
@@ -44,12 +44,12 @@ Se controlará el acceso mediante middleware/guards y políticas por módulo. La
 1. **Carga de extracto**  
    - Subir archivo (CSV/XLSX) → se normaliza según banco → se crea `import_batch` → registros en `bank_statements` + `bank_statement_lines`.  
    - Validaciones: formato esperado, duplicados (por `operation_number + amount`), totales vs saldo.
-2. **Carga de facturación**  
-   - Similar proceso: `invoice_batches` + `invoices`.  
-   - Validar número de factura único y monto positivo.
-3. **Carga de vouchers**  
+2. **Carga de vouchers**  
    - Lote o manual. Para manual se guarda `document_path` (storage).  
    - `status`: `recibido`, `validando`, `validado`, `rechazado`.
+3. **Gestión de facturación**  
+   - Se realiza desde el módulo de Cajero marcando cada voucher conciliado como `facturado`.  
+   - No se importan archivos externos; sólo se cambia de `pendiente` a `facturado`.
 
 ### 3.2 Conciliación
 1. UI (módulo existente) consumirá endpoints `/api/ingresos/conciliacion`.  
@@ -86,7 +86,6 @@ Se controlará el acceso mediante middleware/guards y políticas por módulo. La
 | Método | Ruta                                        | Rol permitido                 | Descripción |
 |--------|---------------------------------------------|-------------------------------|-------------|
 | POST   | `/api/ingresos/import/extractos`            | Encargado                     | Carga extracto bancario |
-| POST   | `/api/ingresos/import/facturacion`          | Encargado                     | Importa reporte de facturación |
 | POST   | `/api/ingresos/import/vouchers`             | Encargado                     | Carga vouchers en lote |
 | GET    | `/api/ingresos/conciliacion`                | Encargado/Jefe                | Listado de transacciones con filtros |
 | POST   | `/api/ingresos/conciliacion/{id}/confirmar` | Encargado                     | Confirma la conciliación manual |
@@ -99,7 +98,7 @@ Se controlará el acceso mediante middleware/guards y políticas por módulo. La
 
 ## 5. Pasos siguientes
 1. Generar migraciones iniciales acorde al modelo superior (priorizar bancos, statements, invoices, vouchers, transactions).  
-2. Crear controladores y servicios para importación de extractos/facturación, con validación de formatos.  
+2. Crear controladores y servicios para importación de extractos y vouchers, con validación de formatos.  
 3. Implementar API de conciliación reutilizando la UI existente del panel de ingresos.  
 4. Construir reportes operativos (tablas + export) y tablero ejecutivo (agregados).  
 5. Añadir portales de consulta (cajero/estudiante) conectando a endpoints de lectura.  

@@ -25,8 +25,6 @@ class VoucherController extends Controller
             'paid_at' => ['required', 'date'],
             'operation_number' => ['required', 'string', 'max:80'],
             'account_reference' => ['nullable', 'string', 'max:80'],
-            'status' => ['required', 'string', 'max:40'],
-            'cashbox_number' => ['nullable', 'string', 'max:50'],
             'voucher_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png'],
         ]);
 
@@ -40,6 +38,14 @@ class VoucherController extends Controller
             );
         }
 
+        $duplicateOperation = PaymentVoucher::query()
+            ->where('operation_number', $validated['operation_number'])
+            ->where('status', '!=', 'rechazado')
+            ->where('bank_account_id', $validated['bank_account_id'])
+            ->exists();
+
+        abort_if($duplicateOperation, 422, 'Ya existe un voucher con ese número de operación para esta cuenta.');
+
         $path = null;
         $mime = null;
         if ($request->hasFile('voucher_file')) {
@@ -50,8 +56,9 @@ class VoucherController extends Controller
         PaymentVoucher::create([
             'voucher_batch_id' => null,
             'student_id' => $validated['student_id'],
+            'bank_id' => $validated['bank_id'],
             'bank_account_id' => $validated['bank_account_id'] ?? null,
-            'cashbox_number' => $validated['cashbox_number'] ?? null,
+            'cashbox_number' => null,
             'payment_type' => $validated['payment_type'],
             'operation_number' => $validated['operation_number'],
             'account_reference' => $validated['account_reference'] ?? null,
@@ -59,7 +66,7 @@ class VoucherController extends Controller
             'currency' => 'BOB',
             'paid_at' => $validated['paid_at'],
             'received_at' => now(),
-            'status' => $validated['status'],
+            'status' => 'recibido',
             'billing_status' => 'pendiente',
             'document_path' => $path,
             'document_mime' => $mime,
