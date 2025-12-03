@@ -17,9 +17,8 @@
     <table>
         <thead>
         <tr>
-            <th># Caja</th>
-            <th>Fecha pago estudiante</th>
-            <th>Fecha recepción</th>
+            <th>Nro</th>
+            <th>Fecha</th>
             <th>N° factura</th>
             <th>NIT/CI</th>
             <th>Razón social</th>
@@ -28,16 +27,17 @@
             <th>Monto (Bs)</th>
             <th>Cuenta</th>
             <th>Estado</th>
-            <th>N° operación</th>
+            <th>ID</th>
+            <th>Banco</th>
+            <th>Fecha registro</th>
         </tr>
         </thead>
         <tbody>
         @foreach ($rows as $row)
             <tr>
-                <td>{{ $row['num_caja'] ?? '—' }}</td>
-                <td>{{ $row['fecha_pago_estudiante'] ?? '—' }}</td>
-                <td>{{ $row['fecha_recepcion'] ?? '—' }}</td>
-                <td>{{ $row['num_factura'] ?? '—' }}</td>
+                <td>{{ $row['nro'] ?? '—' }}</td>
+                <td>{{ $row['fecha'] ?? '—' }}</td>
+                <td>{{ $row['numero_factura'] ?? '—' }}</td>
                 <td>{{ $row['nit_ci'] ?? '—' }}</td>
                 <td>{{ $row['razon_social'] ?? '—' }}</td>
                 <td>{{ $row['nombre_estudiante'] ?? '—' }}</td>
@@ -45,7 +45,9 @@
                 <td class="text-right">{{ number_format($row['monto'] ?? 0, 2, ',', '.') }}</td>
                 <td>{{ $row['cuenta'] ?? '—' }}</td>
                 <td>{{ $row['estado'] ?? '—' }}</td>
-                <td>{{ $row['num_operacion'] ?? '—' }}</td>
+                <td>{{ $row['custom_id'] ?? '—' }}</td>
+                <td>{{ $row['banco'] ?? '—' }}</td>
+                <td>{{ $row['fecha_registro'] ?? '—' }}</td>
             </tr>
         @endforeach
         </tbody>

@@ -59,25 +59,49 @@
       @endif
 
       <div class="mb-4" id="importAccordion">
-        <div class="card card-primary card-outline mb-3">
-          <div class="card-header">
-            <h4 class="card-title mb-0"><i class="fas fa-file-upload mr-2"></i>Importar extracto bancario</h4>
-          </div>
-          <div class="card-body">
-            <form action="{{ route('imports.extracts') }}" method="POST" enctype="multipart/form-data">
-              @csrf
-              <div class="form-group">
-                <label for="file">Archivo (.csv)</label>
-                <input type="file" name="file" id="file" class="form-control-file @error('file') is-invalid @enderror" required>
-                @error('file')
-                  <div class="invalid-feedback d-block">{{ $message }}</div>
-                @enderror
-                <small class="form-text text-muted">Columnas requeridas: bank_code, account_number, operation_number, amount, operation_date, value_date, description.</small>
+        @foreach ($banks as $bank)
+          @php
+            $wasSubmitted = (int) old('bank_id') === $bank->id;
+          @endphp
+          <div class="card card-primary card-outline mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div>
+                <h4 class="card-title mb-0">
+                  <i class="fas fa-file-upload mr-2"></i>Importar extracto · {{ $bank->name }}
+                </h4>
+                <small class="d-block text-muted">Formato dedicado para {{ $bank->short_code }}.</small>
               </div>
-              <button type="submit" class="btn btn-brand btn-sm">Importar extracto</button>
-            </form>
+            </div>
+            <div class="card-body">
+              <form action="{{ route('imports.extracts') }}" method="POST" enctype="multipart/form-data" class="bank-import-form">
+                @csrf
+                <input type="hidden" name="bank_id" value="{{ $bank->id }}">
+                <div class="form-group">
+                  <label for="file-{{ $bank->id }}">Archivo (.xls, .xlsx o .csv)</label>
+                  <input
+                    type="file"
+                    name="file"
+                    id="file-{{ $bank->id }}"
+                    accept=".xls,.xlsx,.csv"
+                    class="form-control-file @error('file') {{ $wasSubmitted ? 'is-invalid' : '' }} @enderror"
+                    required
+                  >
+                  @if ($wasSubmitted)
+                    @error('file')
+                      <div class="invalid-feedback d-block">{{ $message }}</div>
+                    @enderror
+                  @endif
+                  <small class="form-text text-muted">
+                    Se extraerán columnas de Fecha, Hora, Oficina, Descripción, Referencia, Código de transacción, Débitos, Créditos y Saldo.
+                  </small>
+                </div>
+                <button type="submit" class="btn btn-brand btn-sm">
+                  Importar extracto {{ $bank->short_code }}
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
+        @endforeach
 
         <div class="card card-success card-outline mb-3">
           <div class="card-header">
@@ -98,6 +122,36 @@
                 </small>
               </div>
               <button type="submit" class="btn btn-brand btn-sm">Importar vouchers</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="card card-info card-outline mb-3">
+          <div class="card-header">
+            <h4 class="card-title mb-0"><i class="fas fa-book mr-2"></i>Subir libro de ventas</h4>
+          </div>
+          <div class="card-body">
+            <form action="{{ route('imports.sales_book') }}" method="POST" enctype="multipart/form-data">
+              @csrf
+              <div class="form-group">
+                <label for="sales-book-file">Archivo (.xls, .xlsx o .csv)</label>
+                <input
+                  type="file"
+                  name="sales_book_file"
+                  id="sales-book-file"
+                  class="form-control-file @error('sales_book_file') is-invalid @enderror"
+                  accept=".xls,.xlsx,.csv"
+                  required
+                >
+                @error('sales_book_file')
+                  <div class="invalid-feedback d-block">{{ $message }}</div>
+                @enderror
+                <small class="form-text text-muted">
+                  Columnas esperadas: Nro, Fecha, Número de factura, NIT/CI, Razón social, Nombre estudiante, Tipo de pago,
+                  Monto, Cuenta, Estado, ID, Banco, Fecha registro.
+                </small>
+              </div>
+              <button type="submit" class="btn btn-brand btn-sm">Importar libro de ventas</button>
             </form>
           </div>
         </div>

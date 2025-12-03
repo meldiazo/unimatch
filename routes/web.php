@@ -6,9 +6,11 @@ use App\Http\Controllers\Admin\ReconciliationSettingController;
 use App\Http\Controllers\Admin\StudentController as AdminStudentController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Import\BankStatementImportController;
+use App\Http\Controllers\Import\SalesBookImportController;
 use App\Http\Controllers\Import\VoucherImportController;
 use App\Http\Controllers\Income\MatchingController;
 use App\Http\Controllers\Income\VoucherController as IncomeVoucherController;
+use App\Http\Controllers\Income\StatementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\Student\VoucherController as StudentVoucherController;
@@ -138,6 +140,8 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
         ->name('imports.extracts');
     Route::post('/ingresos/import/vouchers', VoucherImportController::class)
         ->name('imports.vouchers');
+    Route::post('/ingresos/import/libro-ventas', SalesBookImportController::class)
+        ->name('imports.sales_book');
 
     Route::post('/ingresos/vouchers', [IncomeVoucherController::class, 'store'])
         ->name('ingresos.vouchers.store');
@@ -145,6 +149,9 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
         ->name('ingresos.vouchers.update');
     Route::post('/ingresos/conciliacion/confirmar', MatchingController::class)
         ->name('ingresos.matching.confirm');
+    Route::get('/ingresos/extractos', [StatementController::class, 'index'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad'])
+        ->name('ingresos.statements.index');
 
     Route::post('/estudiante/vouchers', [StudentVoucherController::class, 'store'])
         ->name('student.vouchers.store');

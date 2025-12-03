@@ -20,6 +20,10 @@ class BankStatementLine extends Model
         'amount',
         'currency',
         'running_balance',
+        'office',
+        'transaction_time',
+        'debit_amount',
+        'credit_amount',
         'raw_payload',
     ];
 
@@ -28,6 +32,9 @@ class BankStatementLine extends Model
         'value_date' => 'date',
         'amount' => 'decimal:2',
         'running_balance' => 'decimal:2',
+        'transaction_time' => 'datetime:H:i:s',
+        'debit_amount' => 'decimal:2',
+        'credit_amount' => 'decimal:2',
         'raw_payload' => 'array',
     ];
 

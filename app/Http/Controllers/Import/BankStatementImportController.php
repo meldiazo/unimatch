@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Import;
 
 use App\Http\Controllers\Controller;
+use App\Models\Bank;
 use App\Services\Imports\BankStatementImporter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,15 +17,19 @@ class BankStatementImportController extends Controller
     public function __invoke(Request $request): RedirectResponse
     {
         $validated = $request->validate([
+            'bank_id' => ['required', 'exists:banks,id'],
             'statement_date' => ['nullable', 'date'],
-            'file' => ['required', 'file', 'mimetypes:text/csv,text/plain,application/vnd.ms-excel,application/csv'],
+            'file' => ['required', 'file', 'mimetypes:text/csv,text/plain,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         ]);
+
+        $bank = Bank::findOrFail($validated['bank_id']);
 
         try {
             $result = $this->importer->handle(
                 user: $request->user(),
+                bank: $bank,
+                uploadedFile: $validated['file'],
                 statementDate: $validated['statement_date'] ?? null,
-                uploadedFile: $validated['file']
             );
         } catch (\InvalidArgumentException $exception) {
             return back()

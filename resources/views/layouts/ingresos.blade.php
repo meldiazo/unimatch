@@ -31,6 +31,7 @@
     $usersActive = request()->routeIs('admin.users.*');
     $reconciliationsReviewActive = request()->routeIs('admin.reconciliations.index');
     $reportActive = request()->routeIs('reports.pagos');
+    $statementsActive = request()->routeIs('ingresos.statements.index');
   @endphp
 
   <div class="wrapper layout-fixed" id="app-wrapper"
@@ -117,6 +118,12 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-table"></i>
+                  <p>Extractos cargados</p>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="{{ route('admin.users.index') }}" class="nav-link {{ $usersActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-users-cog"></i>
                   <p>Gestión de usuarios</p>
@@ -141,6 +148,12 @@
                 <a href="{{ route('dashboard', ['view' => 'matching']) }}" class="nav-link {{ $activeMenu === 'matching' ? 'active' : '' }}" data-target="matching">
                   <i class="nav-icon fas fa-random"></i>
                   <p>Conciliación</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-table"></i>
+                  <p>Extractos cargados</p>
                 </a>
               </li>
               <li class="nav-item">

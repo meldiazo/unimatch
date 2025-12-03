@@ -504,6 +504,22 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
+function formatClock(value, fallback = '') {
+  if (!value) {
+    return fallback || '—';
+  }
+
+  if (value.includes('T')) {
+    return formatTime(value);
+  }
+
+  const parts = value.split(':');
+  const hours = (parts[0] ?? '00').padStart(2, '0');
+  const minutes = (parts[1] ?? '00').padStart(2, '0');
+
+  return `${hours}:${minutes}`;
+}
+
 function getBankName(bankId) {
   const bank = state.banks.find((b) => b.id === bankId);
   return bank ? bank.name : 'Sin banco';
@@ -815,6 +831,9 @@ function renderTransactionList() {
 
   filtered.forEach((tx) => {
     const studentName = getStudentName(tx);
+    const bankLabel = tx.bankName || getBankName(tx.bankId) || 'Sin banco';
+    const officeLabel = tx.office || bankLabel;
+    const timeLabel = tx.transaction_time ? formatClock(tx.transaction_time) : formatTime(tx.date);
     const item = document.createElement('article');
     item.className = 'list-item';
     item.dataset.id = tx.id;
@@ -824,13 +843,17 @@ function renderTransactionList() {
 
     item.innerHTML = `
       <div class="list-meta">
-        <span>${formatDate(tx.date)} · ${formatTime(tx.date)}</span>
-        <span>${tx.bankName || getBankName(tx.bankId) || 'Sin banco'}</span>
+        <span>${bankLabel}</span>
+        <span>${timeLabel}</span>
       </div>
       <strong>${formatCurrency(tx.amount)}</strong>
       <div class="list-meta">
         <span>${studentName} · ${tx.enrollment}</span>
         <span class="badge ${getStatusBadgeClass(tx.status)}">${formatStatus(tx.status)}</span>
+      </div>
+      <div class="list-meta">
+        <span>${tx.operation_number || '—'}</span>
+        <span>${officeLabel}</span>
       </div>
     `;
 
@@ -951,6 +974,13 @@ function renderMatchDetail() {
   const transactionBank = transaction.bankName || getBankName(transaction.bankId) || 'Sin banco';
   const voucherBank = voucher ? (voucher.bankName || getBankName(voucher.bankId) || 'Sin banco') : 'Sin banco';
   const voucherDate = voucher ? (voucher.paymentDate || voucher.issueDate) : null;
+  const debitDisplay = transaction.debit_amount !== null ? formatCurrency(transaction.debit_amount) : '—';
+  const creditDisplay = transaction.credit_amount !== null ? formatCurrency(transaction.credit_amount) : '—';
+  const balanceDisplay =
+    transaction.running_balance !== null ? formatCurrency(transaction.running_balance) : '—';
+  const clockDisplay = transaction.transaction_time
+    ? formatClock(transaction.transaction_time)
+    : formatTime(transaction.date);
 
   const txCard = document.createElement('div');
   txCard.className = 'detail-card';
@@ -978,7 +1008,11 @@ function renderMatchDetail() {
       </div>
       <div>
         <span class="detail-label">Fecha</span>
-        <p class="detail-value">${formatDate(transaction.date)} · ${formatTime(transaction.date)}</p>
+        <p class="detail-value">${formatDate(transaction.date)} · ${clockDisplay}</p>
+      </div>
+      <div>
+        <span class="detail-label">Oficina</span>
+        <p class="detail-value">${transaction.office || '—'}</p>
       </div>
       <div>
         <span class="detail-label">Detalle</span>
@@ -987,6 +1021,18 @@ function renderMatchDetail() {
       <div>
         <span class="detail-label">N.º operación</span>
         <p class="detail-value">${transaction.operation_number || '—'}</p>
+      </div>
+      <div>
+        <span class="detail-label">Débito</span>
+        <p class="detail-value">${debitDisplay}</p>
+      </div>
+      <div>
+        <span class="detail-label">Crédito</span>
+        <p class="detail-value">${creditDisplay}</p>
+      </div>
+      <div>
+        <span class="detail-label">Saldo</span>
+        <p class="detail-value">${balanceDisplay}</p>
       </div>
     </div>
   `;

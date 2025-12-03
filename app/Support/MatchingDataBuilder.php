@@ -124,6 +124,7 @@ class MatchingDataBuilder
                     'reference' => $detailText,
                     'date' => optional($line->operation_date)?->toDateTimeString()
                         ?? now()->toDateTimeString(),
+                    'transaction_time' => optional($line->transaction_time)?->format('H:i:s'),
                     'status' => $status,
                     'channel' => 'transferencia',
                     'alert' => $alert,
@@ -133,6 +134,14 @@ class MatchingDataBuilder
                     'billing_status' => $voucher?->billing_status
                         ?? $suggestion?->billing_status
                         ?? 'pendiente',
+                    'office' => $line->office,
+                    'debit_amount' => $line->debit_amount !== null
+                        ? (float) $line->debit_amount
+                        : ($line->amount < 0 ? abs((float) $line->amount) : 0),
+                    'credit_amount' => $line->credit_amount !== null
+                        ? (float) $line->credit_amount
+                        : ($line->amount > 0 ? (float) $line->amount : 0),
+                    'running_balance' => $line->running_balance !== null ? (float) $line->running_balance : null,
                 ];
             })
             ->values();

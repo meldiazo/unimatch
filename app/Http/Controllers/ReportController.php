@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Bank;
 use App\Models\PaymentVoucher;
+use App\Models\SalesBookEntry;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -25,9 +26,10 @@ class ReportController extends Controller
             403
         );
 
-        $query = PaymentVoucher::with(['student', 'bankAccount.bank'])
+        $voucherQuery = PaymentVoucher::with(['student', 'bankAccount.bank'])
             ->latest('paid_at');
 
+        $banks = Bank::orderBy('name')->get();
         $filters = [
             'start_date' => $request->input('start_date'),
             'end_date' => $request->input('end_date'),
@@ -36,44 +38,88 @@ class ReportController extends Controller
         ];
 
         if ($filters['start_date']) {
-            $query->whereDate('paid_at', '>=', $filters['start_date']);
+            $voucherQuery->whereDate('paid_at', '>=', $filters['start_date']);
         }
 
         if ($filters['end_date']) {
-            $query->whereDate('paid_at', '<=', $filters['end_date']);
+            $voucherQuery->whereDate('paid_at', '<=', $filters['end_date']);
         }
 
         if ($filters['bank_id']) {
-            $query->whereHas('bankAccount', function ($query) use ($filters) {
+            $voucherQuery->whereHas('bankAccount', function ($query) use ($filters) {
                 $query->where('bank_id', $filters['bank_id']);
             });
         }
 
         if ($filters['billing_status']) {
-            $query->where('billing_status', $filters['billing_status']);
+            $voucherQuery->where('billing_status', $filters['billing_status']);
         }
 
-        $rows = $query->get()->map(function (PaymentVoucher $voucher) {
+        $salesQuery = SalesBookEntry::query()->latest('invoice_date');
+
+        if ($filters['start_date']) {
+            $salesQuery->whereDate('invoice_date', '>=', $filters['start_date']);
+        }
+
+        if ($filters['end_date']) {
+            $salesQuery->whereDate('invoice_date', '<=', $filters['end_date']);
+        }
+
+        if ($filters['bank_id']) {
+            $bankFilter = $banks->firstWhere('id', (int) $filters['bank_id']);
+            if ($bankFilter) {
+                $salesQuery->where('bank_name', 'like', '%'.$bankFilter->name.'%');
+            }
+        }
+
+        if ($filters['billing_status']) {
+            $salesQuery->where('state_label', 'like', '%'.$filters['billing_status'].'%');
+        }
+
+        $salesRows = $salesQuery->get()->map(function (SalesBookEntry $entry) {
+                return [
+                    'nro' => $entry->legacy_number ?? '—',
+                    'fecha' => $this->formatDate($entry->invoice_date),
+                    'numero_factura' => $entry->invoice_number ?? '—',
+                    'nit_ci' => $entry->nit_ci ?? '—',
+                    'razon_social' => $entry->razon_social ?? '—',
+                    'nombre_estudiante' => $entry->student_name ?? '—',
+                    'tipo_pago' => $entry->payment_type ?? '—',
+                    'monto' => $entry->amount,
+                    'cuenta' => $entry->account_label ?? '—',
+                    'estado' => $entry->state_label ?? '—',
+                    'custom_id' => $entry->custom_id ?? ('LV-'.$entry->id),
+                    'banco' => $entry->bank_name ?? '—',
+                    'fecha_registro' => $this->formatDate($entry->recorded_date ?? $entry->invoice_date),
+                ];
+            });
+
+        $voucherRows = $voucherQuery->get()->map(function (PaymentVoucher $voucher) {
                 $student = $voucher->student;
                 $payload = is_array($voucher->raw_payload ?? null) ? $voucher->raw_payload : [];
+                $bank = $voucher->bankAccount?->bank ?? $voucher->bank;
+                $account = $voucher->bankAccount?->account_number ?? $voucher->account_reference ?? 'N/A';
 
                 return [
-                    'num_caja' => Arr::get($payload, 'num_caja', '—'),
-                    'fecha_pago_estudiante' => $this->formatDate($voucher->paid_at),
-                    'fecha_recepcion' => $this->formatDate($voucher->received_at),
-                    'num_factura' => Arr::get($payload, 'num_factura', '—'),
-                    'nit_ci' => '—',
-                    'razon_social' => '—',
+                    'nro' => Arr::get($payload, 'num_caja', '—'),
+                    'fecha' => $this->formatDate($voucher->paid_at),
+                    'numero_factura' => Arr::get($payload, 'num_factura', '—'),
+                    'nit_ci' => Arr::get($payload, 'nit_ci', '—'),
+                    'razon_social' => Arr::get($payload, 'razon_social', '—'),
                     'nombre_estudiante' => $student?->full_name ?? 'N/A',
                     'tipo_pago' => $voucher->payment_type ?? 'N/A',
                     'monto' => $voucher->amount,
-                    'cuenta' => $voucher->account_reference
-                        ?? $voucher->bankAccount->account_number
-                        ?? 'N/A',
+                    'cuenta' => $account,
                     'estado' => ucfirst($voucher->billing_status ?? 'pendiente'),
-                    'num_operacion' => $voucher->operation_number ?? 'N/A',
+                    'custom_id' => 'VC-'.$voucher->id,
+                    'banco' => $bank?->name ?? '—',
+                    'fecha_registro' => $this->formatDate($voucher->received_at),
                 ];
             });
+
+        $rows = $salesRows->concat($voucherRows)
+            ->sortByDesc('fecha')
+            ->values();
 
         $export = strtolower((string) $request->query('export', ''));
 
@@ -88,7 +134,7 @@ class ReportController extends Controller
         return view('reports.facturacion', [
             'rows' => $rows,
             'generatedAt' => now(),
-            'banks' => Bank::orderBy('name')->get(),
+            'banks' => $banks,
             'filters' => $filters,
         ]);
     }
@@ -131,8 +177,9 @@ class ReportController extends Controller
         $callback = function () use ($rows) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                'Fecha pago estudiante',
-                'Fecha recepción',
+                'Nro',
+                'Fecha',
+                'Número de factura',
                 'NIT/CI',
                 'Razón social',
                 'Nombre estudiante',
@@ -140,13 +187,16 @@ class ReportController extends Controller
                 'Monto',
                 'Cuenta',
                 'Estado',
-                'N° operación',
+                'ID',
+                'Banco',
+                'Fecha registro',
             ]);
 
             foreach ($rows as $row) {
                 fputcsv($handle, [
-                    $row['fecha_pago_estudiante'],
-                    $row['fecha_recepcion'],
+                    $row['nro'],
+                    $row['fecha'],
+                    $row['numero_factura'],
                     $row['nit_ci'],
                     $row['razon_social'],
                     $row['nombre_estudiante'],
@@ -154,7 +204,9 @@ class ReportController extends Controller
                     $row['monto'],
                     $row['cuenta'],
                     $row['estado'],
-                    $row['num_operacion'],
+                    $row['custom_id'],
+                    $row['banco'],
+                    $row['fecha_registro'],
                 ]);
             }
 
