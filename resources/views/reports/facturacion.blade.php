@@ -25,10 +25,12 @@
           <small class="text-muted">Datos consolidados desde vouchers recibidos.</small>
         </div>
         <div class="col-sm-4 text-sm-right">
-          <a href="{{ route('reports.pagos', array_merge(request()->all(), ['export' => 'csv'])) }}" class="btn btn-sm btn-outline-brand mr-2">
-            <i class="fas fa-file-csv mr-1"></i> Descargar CSV
+          <a href="{{ route('reports.pagos', array_merge(request()->all(), ['export' => 'txt'])) }}"
+            class="btn btn-sm btn-outline-brand mr-2">
+            <i class="fas fa-file-alt mr-1"></i> Descargar TXT
           </a>
-          <a href="{{ route('reports.pagos', array_merge(request()->all(), ['export' => 'pdf'])) }}" class="btn btn-sm btn-outline-brand mr-2">
+          <a href="{{ route('reports.pagos', array_merge(request()->all(), ['export' => 'pdf'])) }}"
+            class="btn btn-sm btn-outline-brand mr-2">
             <i class="fas fa-file-download mr-1"></i> Descargar PDF
           </a>
           <span class="badge badge-light">Generado: {{ $generatedAt->format('d/m/Y H:i') }}</span>
@@ -47,7 +49,8 @@
           <form method="GET" class="form-row">
             <div class="form-group col-md-3">
               <label for="start_date">Desde</label>
-              <input type="date" name="start_date" id="start_date" value="{{ $filters['start_date'] }}" class="form-control">
+              <input type="date" name="start_date" id="start_date" value="{{ $filters['start_date'] }}"
+                class="form-control">
             </div>
             <div class="form-group col-md-3">
               <label for="end_date">Hasta</label>
@@ -68,8 +71,10 @@
               <label for="billing_status">Estado facturación</label>
               <select name="billing_status" id="billing_status" class="form-control">
                 <option value="">Todos</option>
-                <option value="facturado" {{ $filters['billing_status'] === 'facturado' ? 'selected' : '' }}>Facturado</option>
-                <option value="pendiente" {{ $filters['billing_status'] === 'pendiente' ? 'selected' : '' }}>Pendiente</option>
+                <option value="facturado" {{ $filters['billing_status'] === 'facturado' ? 'selected' : '' }}>Facturado
+                </option>
+                <option value="pendiente" {{ $filters['billing_status'] === 'pendiente' ? 'selected' : '' }}>Pendiente
+                </option>
               </select>
             </div>
             <div class="form-group col-md-3 mt-3">
@@ -119,7 +124,8 @@
                   <td class="text-right">{{ number_format($row['monto'], 2, ',', '.') }}</td>
                   <td>{{ $row['cuenta'] }}</td>
                   <td>
-                    <span class="badge {{ Str::contains(strtolower($row['estado']), 'facturado') ? 'badge-success' : 'badge-warning' }}">
+                    <span
+                      class="badge {{ Str::contains(strtolower($row['estado']), 'facturado') ? 'badge-success' : 'badge-warning' }}">
                       {{ $row['estado'] }}
                     </span>
                   </td>

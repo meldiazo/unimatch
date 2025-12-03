@@ -68,54 +68,54 @@ class ReportController extends Controller
         if ($filters['bank_id']) {
             $bankFilter = $banks->firstWhere('id', (int) $filters['bank_id']);
             if ($bankFilter) {
-                $salesQuery->where('bank_name', 'like', '%'.$bankFilter->name.'%');
+                $salesQuery->where('bank_name', 'like', '%' . $bankFilter->name . '%');
             }
         }
 
         if ($filters['billing_status']) {
-            $salesQuery->where('state_label', 'like', '%'.$filters['billing_status'].'%');
+            $salesQuery->where('state_label', 'like', '%' . $filters['billing_status'] . '%');
         }
 
         $salesRows = $salesQuery->get()->map(function (SalesBookEntry $entry) {
-                return [
-                    'nro' => $entry->legacy_number ?? '—',
-                    'fecha' => $this->formatDate($entry->invoice_date),
-                    'numero_factura' => $entry->invoice_number ?? '—',
-                    'nit_ci' => $entry->nit_ci ?? '—',
-                    'razon_social' => $entry->razon_social ?? '—',
-                    'nombre_estudiante' => $entry->student_name ?? '—',
-                    'tipo_pago' => $entry->payment_type ?? '—',
-                    'monto' => $entry->amount,
-                    'cuenta' => $entry->account_label ?? '—',
-                    'estado' => $entry->state_label ?? '—',
-                    'custom_id' => $entry->custom_id ?? ('LV-'.$entry->id),
-                    'banco' => $entry->bank_name ?? '—',
-                    'fecha_registro' => $this->formatDate($entry->recorded_date ?? $entry->invoice_date),
-                ];
-            });
+            return [
+                'nro' => $entry->legacy_number ?? '—',
+                'fecha' => $this->formatDate($entry->invoice_date),
+                'numero_factura' => $entry->invoice_number ?? '—',
+                'nit_ci' => $entry->nit_ci ?? '—',
+                'razon_social' => $entry->razon_social ?? '—',
+                'nombre_estudiante' => $entry->student_name ?? '—',
+                'tipo_pago' => $entry->payment_type ?? '—',
+                'monto' => $entry->amount,
+                'cuenta' => $entry->account_label ?? '—',
+                'estado' => $entry->state_label ?? '—',
+                'custom_id' => $entry->custom_id ?? ('LV-' . $entry->id),
+                'banco' => $entry->bank_name ?? '—',
+                'fecha_registro' => $this->formatDate($entry->recorded_date ?? $entry->invoice_date),
+            ];
+        });
 
         $voucherRows = $voucherQuery->get()->map(function (PaymentVoucher $voucher) {
-                $student = $voucher->student;
-                $payload = is_array($voucher->raw_payload ?? null) ? $voucher->raw_payload : [];
-                $bank = $voucher->bankAccount?->bank ?? $voucher->bank;
-                $account = $voucher->bankAccount?->account_number ?? $voucher->account_reference ?? 'N/A';
+            $student = $voucher->student;
+            $payload = is_array($voucher->raw_payload ?? null) ? $voucher->raw_payload : [];
+            $bank = $voucher->bankAccount?->bank ?? $voucher->bank;
+            $account = $voucher->bankAccount?->account_number ?? $voucher->account_reference ?? 'N/A';
 
-                return [
-                    'nro' => Arr::get($payload, 'num_caja', '—'),
-                    'fecha' => $this->formatDate($voucher->paid_at),
-                    'numero_factura' => Arr::get($payload, 'num_factura', '—'),
-                    'nit_ci' => Arr::get($payload, 'nit_ci', '—'),
-                    'razon_social' => Arr::get($payload, 'razon_social', '—'),
-                    'nombre_estudiante' => $student?->full_name ?? 'N/A',
-                    'tipo_pago' => $voucher->payment_type ?? 'N/A',
-                    'monto' => $voucher->amount,
-                    'cuenta' => $account,
-                    'estado' => ucfirst($voucher->billing_status ?? 'pendiente'),
-                    'custom_id' => 'VC-'.$voucher->id,
-                    'banco' => $bank?->name ?? '—',
-                    'fecha_registro' => $this->formatDate($voucher->received_at),
-                ];
-            });
+            return [
+                'nro' => Arr::get($payload, 'num_caja', '—'),
+                'fecha' => $this->formatDate($voucher->paid_at),
+                'numero_factura' => Arr::get($payload, 'num_factura', '—'),
+                'nit_ci' => Arr::get($payload, 'nit_ci', '—'),
+                'razon_social' => Arr::get($payload, 'razon_social', '—'),
+                'nombre_estudiante' => $student?->full_name ?? 'N/A',
+                'tipo_pago' => $voucher->payment_type ?? 'N/A',
+                'monto' => $voucher->amount,
+                'cuenta' => $account,
+                'estado' => ucfirst($voucher->billing_status ?? 'pendiente'),
+                'custom_id' => 'VC-' . $voucher->id,
+                'banco' => $bank?->name ?? '—',
+                'fecha_registro' => $this->formatDate($voucher->received_at),
+            ];
+        });
 
         $rows = $salesRows->concat($voucherRows)
             ->sortByDesc('fecha')
@@ -131,6 +131,10 @@ class ReportController extends Controller
             return $this->downloadCsv($rows);
         }
 
+        if ($export === 'txt') {
+            return $this->downloadTxt($rows);
+        }
+
         return view('reports.facturacion', [
             'rows' => $rows,
             'generatedAt' => now(),
@@ -141,7 +145,7 @@ class ReportController extends Controller
 
     private function formatDate($value): string
     {
-        if (! $value) {
+        if (!$value) {
             return 'N/A';
         }
 
@@ -164,16 +168,31 @@ class ReportController extends Controller
             'user' => $request->user(),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download('reporte-pagos-'.now()->format('Ymd_His').'.pdf');
+        return $pdf->download('reporte-pagos-' . now()->format('Ymd_His') . '.pdf');
     }
 
     private function downloadCsv($rows)
     {
         $headers = [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="reporte-pagos-'.now()->format('Ymd_His').'.csv"',
+            'Content-Disposition' => 'attachment; filename="reporte-pagos-' . now()->format('Ymd_His') . '.csv"',
         ];
 
+        return $this->streamCsv($rows, $headers);
+    }
+
+    private function downloadTxt($rows)
+    {
+        $headers = [
+            'Content-Type' => 'text/plain',
+            'Content-Disposition' => 'attachment; filename="reporte-pagos-' . now()->format('Ymd_His') . '.txt"',
+        ];
+
+        return $this->streamCsv($rows, $headers);
+    }
+
+    private function streamCsv($rows, $headers)
+    {
         $callback = function () use ($rows) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
