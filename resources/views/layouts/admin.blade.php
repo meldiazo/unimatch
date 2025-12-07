@@ -5,7 +5,7 @@
 @section('content')
   @php
     $user = auth()->user();
-    $formatMenuActive = request()->routeIs('admin.banks.*') || request()->routeIs('admin.bank-accounts.*') || request()->routeIs('admin.settings.reconciliation.*');
+    $formatMenuActive = request()->routeIs('admin.banks.*') || request()->routeIs('admin.settings.reconciliation.*');
     $userMenuActive = request()->routeIs('admin.students.*') || request()->routeIs('admin.users.*');
   @endphp
   <div class="wrapper">
@@ -62,12 +62,6 @@
                   <a href="{{ route('admin.banks.index') }}" class="nav-link {{ request()->routeIs('admin.banks.*') ? 'active' : '' }}">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Catálogo de bancos</p>
-                  </a>
-                </li>
-                <li class="nav-item">
-                  <a href="{{ route('admin.bank-accounts.index') }}" class="nav-link {{ request()->routeIs('admin.bank-accounts.*') ? 'active' : '' }}">
-                    <i class="far fa-circle nav-icon"></i>
-                    <p>Cuentas bancarias</p>
                   </a>
                 </li>
                 <li class="nav-item">

@@ -8,6 +8,7 @@
     $defaultRoleLabel = match ($user?->role) {
       \App\Models\User::ROLE_JEFE_CONTABILIDAD => 'Jefe de contabilidad',
       \App\Models\User::ROLE_ENCARGADO_INGRESOS => 'Encargado de ingresos',
+      \App\Models\User::ROLE_CAJERO => 'Cajero',
       default => ucwords(str_replace('_', ' ', $user->role ?? 'Usuario')),
     };
     $roleLabel = trim($__env->yieldContent('panel-role-label')) ?: $defaultRoleLabel;
@@ -21,17 +22,28 @@
     $hasDynamicMenu = $rawActiveMenu === '' && request()->routeIs('dashboard');
     $activeMenu = $rawActiveMenu !== '' ? $rawActiveMenu : ($hasDynamicMenu ? 'dashboard' : null);
     $isExecutivePanel = $user?->role === \App\Models\User::ROLE_JEFE_CONTABILIDAD;
-    $panelTitle = $isExecutivePanel ? 'Panel ejecutivo · Jefatura de contabilidad' : 'Panel operativo de ingresos';
-    $brandLabel = $isExecutivePanel ? 'UniMatch · Jefatura' : 'UniMatch · Ingresos';
-    $dashboardRoute = $isExecutivePanel ? route('admin.dashboard') : route('dashboard');
+    $isCashierPanel = $user?->role === \App\Models\User::ROLE_CAJERO;
+    if ($isExecutivePanel) {
+      $panelTitle = 'Panel ejecutivo · Jefatura de contabilidad';
+      $brandLabel = 'UniMatch · Jefatura';
+      $dashboardRoute = route('admin.dashboard');
+    } elseif ($isCashierPanel) {
+      $panelTitle = 'Panel de cajero · Consulta de reportes';
+      $brandLabel = 'UniMatch · Cajero';
+      $dashboardRoute = route('dashboard');
+    } else {
+      $panelTitle = 'Panel operativo de ingresos';
+      $brandLabel = 'UniMatch · Ingresos';
+      $dashboardRoute = route('dashboard');
+    }
     $banksActive = request()->routeIs('admin.banks.*');
     $accountsActive = request()->routeIs('admin.bank-accounts.*');
     $settingsActive = request()->routeIs('admin.settings.reconciliation.*');
     $catalogActive = $banksActive || $accountsActive || $settingsActive;
     $usersActive = request()->routeIs('admin.users.*');
-    $reconciliationsReviewActive = request()->routeIs('admin.reconciliations.index');
-    $reportActive = request()->routeIs('reports.pagos');
     $statementsActive = request()->routeIs('ingresos.statements.index');
+    $salesReportActive = request()->routeIs('ingresos.sales-report.index');
+    $reconciliationReportActive = request()->routeIs('ingresos.reconciliation-report.index');
   @endphp
 
   <div class="wrapper layout-fixed" id="app-wrapper"
@@ -82,12 +94,6 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a href="{{ route('admin.dashboard', ['view' => 'facturacion']) }}" class="nav-link {{ $activeMenu === 'facturacion' ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-file-invoice-dollar"></i>
-                  <p>Facturación</p>
-                </a>
-              </li>
-              <li class="nav-item">
                 <a href="{{ route('admin.dashboard', ['view' => 'students']) }}" class="nav-link {{ $activeMenu === 'students' ? 'active' : '' }}">
                   <i class="nav-icon fas fa-user-check"></i>
                   <p>Seguimiento de estudiantes</p>
@@ -100,21 +106,15 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a href="{{ route('admin.bank-accounts.index') }}" class="nav-link {{ $accountsActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-piggy-bank"></i>
-                  <p>Cuentas bancarias</p>
-                </a>
-              </li>
-              <li class="nav-item">
                 <a href="{{ route('admin.settings.reconciliation.edit') }}" class="nav-link {{ $settingsActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-sliders-h"></i>
                   <p>Parámetros de conciliación</p>
                 </a>
               </li>
               <li class="nav-item">
-                <a href="{{ route('admin.reconciliations.index') }}" class="nav-link {{ $reconciliationsReviewActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-clipboard-check"></i>
-                  <p>Revisión de conciliaciones</p>
+                <a href="{{ route('ingresos.reconciliation-report.index') }}" class="nav-link {{ $reconciliationReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-list"></i>
+                  <p>Reporte de conciliaciones</p>
                 </a>
               </li>
               <li class="nav-item">
@@ -130,9 +130,36 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a href="{{ route('reports.pagos') }}" class="nav-link {{ $reportActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-file-excel"></i>
-                  <p>Reporte de pagos</p>
+                <a href="{{ route('ingresos.sales-report.index') }}" class="nav-link {{ $salesReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-book"></i>
+                  <p>Reporte diario</p>
+                </a>
+              </li>
+            </ul>
+          @elseif ($isCashierPanel)
+            <ul class="nav nav-pills nav-sidebar flex-column">
+              <li class="nav-item">
+                <a href="{{ route('dashboard') }}" class="nav-link {{ $activeMenu === 'dashboard' ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-home"></i>
+                  <p>Resumen</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-table"></i>
+                  <p>Extractos cargados</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.sales-report.index') }}" class="nav-link {{ $salesReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-book"></i>
+                  <p>Reporte diario</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.reconciliation-report.index') }}" class="nav-link {{ $reconciliationReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-list"></i>
+                  <p>Reporte de conciliaciones</p>
                 </a>
               </li>
             </ul>
@@ -157,33 +184,27 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a href="{{ route('dashboard', ['view' => 'reconciliations']) }}" class="nav-link {{ $activeMenu === 'reconciliations' ? 'active' : '' }}" data-target="reconciliations">
-                  <i class="nav-icon fas fa-file-invoice-dollar"></i>
-                  <p>Facturación</p>
-                </a>
-              </li>
-              <li class="nav-item">
                 <a href="{{ route('dashboard', ['view' => 'students']) }}" class="nav-link {{ $activeMenu === 'students' ? 'active' : '' }}" data-target="students">
                   <i class="nav-icon fas fa-user-check"></i>
                   <p>Seguimiento de estudiantes</p>
                 </a>
               </li>
               <li class="nav-item">
-                <a href="{{ route('reports.pagos') }}" class="nav-link {{ $reportActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-file-excel"></i>
-                  <p>Reporte de pagos</p>
+                <a href="{{ route('ingresos.sales-report.index') }}" class="nav-link {{ $salesReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-book"></i>
+                  <p>Reporte diario</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.reconciliation-report.index') }}" class="nav-link {{ $reconciliationReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-list"></i>
+                  <p>Reporte de conciliaciones</p>
                 </a>
               </li>
               <li class="nav-item">
                 <a href="{{ route('admin.banks.index') }}" class="nav-link {{ $banksActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-university"></i>
                   <p>Catálogo de bancos</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="{{ route('admin.bank-accounts.index') }}" class="nav-link {{ $accountsActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-piggy-bank"></i>
-                  <p>Cuentas bancarias</p>
                 </a>
               </li>
               <li class="nav-item">

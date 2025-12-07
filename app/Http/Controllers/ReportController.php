@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ReportController extends Controller
 {
     /**
-     * Reporte de pagos (facturación / caja).
+     * Reporte diario consolidado (facturación / descargas).
      */
     public function pagos(Request $request)
     {
@@ -91,6 +91,7 @@ class ReportController extends Controller
                     'custom_id' => $entry->custom_id ?? ('LV-'.$entry->id),
                     'banco' => $entry->bank_name ?? '—',
                     'fecha_registro' => $this->formatDate($entry->recorded_date ?? $entry->invoice_date),
+                    'operation_reference' => $entry->operation_reference ?? '—',
                 ];
             });
 
@@ -114,6 +115,7 @@ class ReportController extends Controller
                     'custom_id' => 'VC-'.$voucher->id,
                     'banco' => $bank?->name ?? '—',
                     'fecha_registro' => $this->formatDate($voucher->received_at),
+                    'operation_reference' => Arr::get($payload, 'operation_number', '—'),
                 ];
             });
 
@@ -190,6 +192,7 @@ class ReportController extends Controller
                 'ID',
                 'Banco',
                 'Fecha registro',
+                'N° operación',
             ]);
 
             foreach ($rows as $row) {
@@ -207,6 +210,7 @@ class ReportController extends Controller
                     $row['custom_id'],
                     $row['banco'],
                     $row['fecha_registro'],
+                    $row['operation_reference'] ?? '—',
                 ]);
             }
 

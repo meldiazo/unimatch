@@ -24,6 +24,7 @@ class SalesBookEntry extends Model
         'state_label',
         'custom_id',
         'bank_name',
+        'operation_reference',
         'recorded_date',
         'raw_payload',
     ];
@@ -38,5 +39,10 @@ class SalesBookEntry extends Model
     public function batch()
     {
         return $this->belongsTo(ImportBatch::class, 'import_batch_id');
+    }
+
+    public function transaction()
+    {
+        return $this->hasOne(Transaction::class, 'sales_book_entry_id');
     }
 }

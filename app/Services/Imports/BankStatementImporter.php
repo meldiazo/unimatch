@@ -9,12 +9,14 @@ use App\Models\BankStatementLine;
 use App\Models\ImportBatch;
 use App\Models\User;
 use App\Support\BinaryXlsReader;
+use App\Support\SimpleXlsxReader;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class BankStatementImporter
 {
@@ -49,7 +51,7 @@ class BankStatementImporter
 
         $account = $this->resolveAccountForImport($bank, $rows);
 
-        $incomingOperations = collect($rows)
+        $incomingOperationsForQuery = collect($rows)
             ->map(fn ($row) => trim((string) ($row['operation_number'] ?? '')))
             ->filter()
             ->unique()
@@ -58,9 +60,9 @@ class BankStatementImporter
         $existingOperations = BankStatementLine::whereHas('statement', function ($query) use ($account) {
                 $query->where('bank_account_id', $account->id);
             })
-            ->whereIn('operation_number', $incomingOperations)
+            ->whereIn('operation_number', $incomingOperationsForQuery)
             ->pluck('operation_number')
-            ->map(fn ($op) => trim((string) $op))
+            ->map(fn ($op) => $this->normalizeOperationKey($op))
             ->filter()
             ->all();
 
@@ -94,12 +96,13 @@ class BankStatementImporter
             $skipped = 0;
             $seenInBatch = [];
             foreach ($rows as $index => $row) {
-                $normalizedOperation = trim((string) ($row['operation_number'] ?? ''));
-                if ($normalizedOperation === '') {
+                $rawOperation = trim((string) ($row['operation_number'] ?? ''));
+                $operationKey = $this->normalizeOperationKey($rawOperation);
+                if ($operationKey === '') {
                     continue;
                 }
 
-                if (isset($existingOperationMap[$normalizedOperation]) || isset($seenInBatch[$normalizedOperation])) {
+                if (isset($existingOperationMap[$operationKey]) || isset($seenInBatch[$operationKey])) {
                     $skipped++;
                     continue;
                 }
@@ -112,13 +115,38 @@ class BankStatementImporter
                 $transactionTime = $this->parseTimeValue($row['transaction_time'] ?? null);
                 $debit = $row['debit_amount'] ?? null;
                 $credit = $row['credit_amount'] ?? null;
-                $runningBalance = $row['running_balance'] ?? null;
+
                 $rawPayload = $row['raw_payload'] ?? $row;
+
+                $rawDebit = $this->valueFromRow($rawPayload, ['debitos', 'debito', 'debito', 'cargos', 'debit']);
+                if ($rawDebit !== null) {
+                    $debit = $rawDebit;
+                }
+
+                $rawCredit = $this->valueFromRow($rawPayload, ['creditos', 'credito', 'credit', 'abonos']);
+                if ($rawCredit !== null) {
+                    $credit = $rawCredit;
+                }
+
+                if ($debit === null && $credit === null && array_key_exists('amount', $row) && $row['amount'] !== null) {
+                    $signedAmount = $this->parseAmount($row['amount']);
+                    if ($signedAmount < 0) {
+                        $debit = abs($signedAmount);
+                    } elseif ($signedAmount > 0) {
+                        $credit = $signedAmount;
+                    }
+                }
+
+                $runningBalance = $row['running_balance'] ?? null;
+                $rawBalance = $this->valueFromRow($rawPayload, ['saldo', 'balance', 'running_balance']);
+                if ($rawBalance !== null) {
+                    $runningBalance = $rawBalance;
+                }
 
                 BankStatementLine::create([
                     'bank_statement_id' => $statement->id,
                     'line_number' => $index + 1,
-                    'operation_number' => $normalizedOperation,
+                    'operation_number' => $rawOperation !== '' ? $rawOperation : $operationKey,
                     'reference' => $reference,
                     'description' => $description,
                     'office' => $office,
@@ -133,7 +161,7 @@ class BankStatementImporter
                     'raw_payload' => $rawPayload,
                 ]);
 
-                $seenInBatch[$normalizedOperation] = true;
+                $seenInBatch[$operationKey] = true;
                 $inserted++;
             }
 
@@ -167,6 +195,11 @@ class BankStatementImporter
 
         return match ($shortCode) {
             'BNB' => $this->parseBnbSheet($path),
+            'BE' => $this->parseEconomicoSheet($path),
+            'BCP' => $this->parseBcpSheet($path),
+            'BISA' => $this->parseBisaSheet($path),
+            'BMSC' => $this->parseMercantilSheet($path),
+            'BNI' => $this->parseUnionSheet($path),
             default => $this->normalizeCsvRows($bank, $this->parseCsv($path)),
         };
     }
@@ -221,6 +254,9 @@ class BankStatementImporter
             'operation_date' => 'operation_date',
             'value_date' => 'value_date',
             'amount' => 'amount',
+            'running_balance' => 'running_balance',
+            'debit_amount' => 'debit_amount',
+            'credit_amount' => 'credit_amount',
         ], Arr::get($bank->format_config, 'columns', []));
 
         if (! array_key_exists('description', $mapping) && array_key_exists('reference', $mapping)) {
@@ -235,31 +271,129 @@ class BankStatementImporter
                 'operation_date' => $row[$mapping['operation_date']] ?? null,
                 'value_date' => $row[$mapping['value_date']] ?? null,
                 'amount' => $row[$mapping['amount']] ?? null,
+                'debit_amount' => $this->valueFromRow($row, [
+                    $mapping['debit_amount'] ?? null,
+                    'debit',
+                    'debito',
+                    'cargos',
+                ]),
+                'credit_amount' => $this->valueFromRow($row, [
+                    $mapping['credit_amount'] ?? null,
+                    'credit',
+                    'credito',
+                    'creditos',
+                    'abonos',
+                ]),
+                'running_balance' => $this->valueFromRow($row, [
+                    $mapping['running_balance'] ?? null,
+                    'running_balance',
+                    'balance',
+                    'saldo',
+                ]),
                 'currency' => 'BOB',
                 'raw_payload' => $row,
             ];
         }, $rows);
     }
 
-    private function parseBnbSheet(string $path): array
+    private function valueFromRow(array $row, array $candidates): mixed
     {
-        if ($this->isBinaryXls($path)) {
-            $rows = BinaryXlsReader::extractRows($path);
+        foreach ($candidates as $candidate) {
+            if ($candidate === null) {
+                continue;
+            }
 
-            return $this->normalizeBnbRows($rows);
+            if (! array_key_exists($candidate, $row)) {
+                continue;
+            }
+
+            $value = $row[$candidate];
+
+            if (is_string($value)) {
+                $trimmed = trim($value);
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                return $trimmed;
+            }
+
+            if ($value !== null) {
+                return $value;
+            }
         }
 
-        $content = @file_get_contents($path);
-        if ($content === false) {
+        return null;
+    }
+
+    private function parseBnbSheet(string $path): array
+    {
+        $rows = $this->parseExcelRows($path);
+        if (empty($rows)) {
+            $content = @file_get_contents($path);
+            if ($content === false) {
+                return [];
+            }
+
+            $content = $this->normalizeEncoding($content);
+            $rows = str_contains(strtolower($content), '<table')
+                ? $this->parseHtmlTable($content)
+                : $this->parseTabDelimited($content);
+        }
+
+        if (empty($rows)) {
             return [];
         }
 
-        $content = $this->normalizeEncoding($content);
-        $rawRows = str_contains(strtolower($content), '<table')
-            ? $this->parseHtmlTable($content)
-            : $this->parseTabDelimited($content);
+        $headers = array_map([$this, 'normalizeHeader'], array_shift($rows));
+        $required = [
+            'fecha' => 'operation_date',
+            'hora' => 'transaction_time',
+            'oficina' => 'office',
+            'descripcion' => 'description',
+            'referencia' => 'reference',
+            'codigo_de_transaccion' => 'operation_number',
+            'debitos' => 'debit',
+            'creditos' => 'credit',
+            'saldo' => 'balance',
+        ];
 
-        return $this->normalizeBnbRows($rawRows);
+        $positions = [];
+        foreach ($required as $header => $alias) {
+            $index = array_search($header, $headers, true);
+            if ($index === false) {
+                throw new InvalidArgumentException('El archivo no coincide con el formato de Banco BNB.');
+            }
+            $positions[$alias] = $index;
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $operationNumber = trim((string) ($row[$positions['operation_number']] ?? ''));
+            if ($operationNumber === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'operation_number' => $operationNumber,
+                'description' => $row[$positions['description']] ?? null,
+                'reference' => $row[$positions['reference']] ?? null,
+                'operation_date' => $this->castDateValue($row[$positions['operation_date']] ?? null),
+                'value_date' => $this->castDateValue($row[$positions['operation_date']] ?? null),
+                'transaction_time' => $this->parseTimeValue($row[$positions['transaction_time']] ?? null),
+                'office' => $row[$positions['office']] ?? null,
+                'debit_amount' => $this->parseNumeric($row[$positions['debit']] ?? null),
+                'credit_amount' => $this->parseNumeric($row[$positions['credit']] ?? null),
+                'running_balance' => $this->parseNumeric($row[$positions['balance']] ?? null),
+                'raw_payload' => $row,
+            ];
+        }
+
+        return $normalized;
     }
 
     private function parseHtmlTable(string $content): array
@@ -317,6 +451,26 @@ class BankStatementImporter
         return $rows;
     }
 
+    private function parseExcelRows(string $path): array
+    {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($extension === 'xlsx' || $this->isXlsx($path)) {
+            $rows = SimpleXlsxReader::extractRows($path);
+            if (! empty($rows)) {
+                return $rows;
+            }
+        }
+
+        if ($extension === 'xls' || $this->isBinaryXls($path)) {
+            $rows = BinaryXlsReader::extractRows($path);
+            if (! empty($rows)) {
+                return $rows;
+            }
+        }
+
+        return [];
+    }
+
     private function normalizeEncoding(string $content): string
     {
         $encoding = mb_detect_encoding($content, ['UTF-8', 'UTF-16LE', 'UTF-16', 'ISO-8859-1'], true);
@@ -340,6 +494,19 @@ class BankStatementImporter
         return $signature === "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1";
     }
 
+    private function isXlsx(string $path): bool
+    {
+        $handle = @fopen($path, 'rb');
+        if (! $handle) {
+            return false;
+        }
+
+        $signature = fread($handle, 4) ?: '';
+        fclose($handle);
+
+        return $signature === "PK\x03\x04";
+    }
+
     private function normalizeHeader(string $header): string
     {
         return Str::of($header)
@@ -348,6 +515,423 @@ class BankStatementImporter
             ->replace(['.', '-', '/', '  '], [' ', ' ', ' ', ' '])
             ->snake()
             ->value();
+    }
+
+    /**
+     * @param array<string, array<int, string>> $aliases
+     * @param callable(array<string, mixed>, array<int, string>): ?array $converter
+     */
+    private function parseStructuredXls(
+        string $path,
+        array $aliases,
+        callable $converter,
+        ?int $minMatches = null,
+        bool $strictHeaders = false,
+        ?string $formatLabel = null
+    ): array {
+        $rows = $this->parseExcelRows($path);
+        if (empty($rows)) {
+            return [];
+        }
+
+        $minMatches = $minMatches ?? min(3, count($aliases));
+        $headerIndex = null;
+        $positions = [];
+
+        foreach ($rows as $index => $row) {
+            $normalized = array_map([$this, 'normalizeHeader'], $row);
+            $positionCandidate = [];
+            $matches = 0;
+
+            foreach ($aliases as $field => $candidates) {
+                foreach ((array) $candidates as $candidate) {
+                    $columnIndex = array_search($candidate, $normalized, true);
+                    if ($columnIndex !== false) {
+                        $positionCandidate[$field] = $columnIndex;
+                        $matches++;
+                        break;
+                    }
+                }
+            }
+
+            if ($matches >= $minMatches) {
+                $headerIndex = $index;
+                $positions = $positionCandidate;
+                break;
+            }
+        }
+
+        if ($headerIndex === null) {
+            if ($strictHeaders) {
+                $label = $formatLabel ?: 'el formato esperado';
+                throw new InvalidArgumentException("El archivo no coincide con el formato de {$label}.");
+            }
+
+            return [];
+        }
+
+        $normalizedRows = [];
+        for ($i = $headerIndex + 1; $i < count($rows); $i++) {
+            $row = $rows[$i];
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $mapped = [];
+            foreach ($positions as $field => $columnIndex) {
+                $mapped[$field] = $row[$columnIndex] ?? null;
+            }
+
+            $normalizedRow = $converter($mapped, $row, $i - $headerIndex);
+            if ($normalizedRow) {
+                $normalizedRows[] = $normalizedRow;
+            }
+        }
+
+        return $normalizedRows;
+    }
+
+    private function parseEconomicoSheet(string $path): array
+    {
+        $rows = $this->parseExcelRows($path);
+        if (empty($rows)) {
+            return [];
+        }
+
+        $headers = array_map([$this, 'normalizeHeader'], array_shift($rows));
+
+        $required = [
+            'fecha' => 'operation_date',
+            'hora' => 'transaction_time',
+            'no' => 'operation_number',
+            'descripcion' => 'description',
+            'debito' => 'debit',
+            'credito' => 'credit',
+            'saldo' => 'balance',
+        ];
+
+        $positions = [];
+        foreach ($required as $header => $alias) {
+            $index = array_search($header, $headers, true);
+            if ($index === false) {
+                throw new InvalidArgumentException('El archivo no coincide con el formato de Banco Económico.');
+            }
+
+            $positions[$alias] = $index;
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $operationNumber = trim((string) ($row[$positions['operation_number']] ?? ''));
+            if ($operationNumber === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'operation_number' => $operationNumber,
+                'description' => $row[$positions['description']] ?? null,
+                'operation_date' => $this->castDateValue($row[$positions['operation_date']] ?? null),
+                'value_date' => $this->castDateValue($row[$positions['operation_date']] ?? null),
+                'transaction_time' => $this->parseTimeValue($row[$positions['transaction_time']] ?? null),
+                'debit_amount' => $this->parseNumeric($row[$positions['debit']] ?? null),
+                'credit_amount' => $this->parseNumeric($row[$positions['credit']] ?? null),
+                'running_balance' => $this->parseNumeric($row[$positions['balance']] ?? null),
+                'raw_payload' => $row,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function parseBcpSheet(string $path): array
+    {
+        return $this->parseStructuredXls(
+            $path,
+            [
+                'operation_date' => ['fecha'],
+                'transaction_time' => ['hora'],
+                'glosa' => ['glosa'],
+                'tipo' => ['tipo'],
+                'sucursal' => ['sucursal_agencia', 'sucursal'],
+                'usuario' => ['usuario'],
+                'amount' => ['importe', 'monto'],
+                'balance' => ['saldo'],
+                'operation_ref' => ['n_operaciones', 'numero_operaciones'],
+            ],
+            function (array $mapped, array $rawRow, int $position) {
+                $amount = $this->parseAmount($mapped['amount'] ?? 0);
+                $debit = null;
+                $credit = null;
+                if ($amount < 0) {
+                    $debit = abs($amount);
+                } else {
+                    $credit = $amount;
+                }
+
+                $operationNumber = trim((string) ($mapped['operation_ref'] ?? ''));
+                if ($operationNumber === '') {
+                    $operationNumber = strtoupper(substr(sha1(implode('|', [
+                        $mapped['operation_date'] ?? '',
+                        $mapped['transaction_time'] ?? '',
+                        $mapped['glosa'] ?? '',
+                        $mapped['amount'] ?? '',
+                    ])), 0, 16));
+                }
+
+                $description = trim(implode(' · ', array_filter([
+                    $mapped['glosa'] ?? null,
+                    $mapped['tipo'] ?? null,
+                ], fn ($part) => trim((string) $part) !== '')));
+
+                $referenceParts = array_filter([
+                    $mapped['sucursal'] ?? null,
+                    $mapped['usuario'] ?? null,
+                ], fn ($part) => trim((string) $part) !== '');
+
+                return [
+                    'operation_number' => $operationNumber,
+                    'description' => $description ?: null,
+                    'reference' => $referenceParts ? implode(' / ', $referenceParts) : null,
+                    'operation_date' => $this->castDateValue($mapped['operation_date'] ?? null),
+                    'value_date' => $this->castDateValue($mapped['operation_date'] ?? null),
+                    'transaction_time' => $this->parseTimeValue($mapped['transaction_time'] ?? null),
+                    'office' => $mapped['sucursal'] ?? null,
+                    'debit_amount' => $debit,
+                    'credit_amount' => $credit,
+                    'running_balance' => $this->parseNumeric($mapped['balance'] ?? null),
+                    'currency' => 'BOB',
+                    'raw_payload' => $mapped,
+                ];
+            },
+            minMatches: 6,
+            strictHeaders: true,
+            formatLabel: 'Banco de Crédito BCP'
+        );
+    }
+
+    private function parseBisaSheet(string $path): array
+    {
+        return $this->parseStructuredXls(
+            $path,
+            [
+                'operation_date' => ['fecha'],
+                'transaction_time' => ['hora'],
+                'reference' => ['nro_ref', 'codigo'],
+                'cheque' => ['nro_cheque'],
+                'description' => ['descripcion'],
+                'amount' => ['importe', 'monto'],
+                'balance' => ['saldo'],
+                'complement' => ['info_complementaria'],
+                'sucursal' => ['sucursal'],
+                'canal' => ['canal'],
+            ],
+            function (array $mapped, array $rawRow, int $position) {
+                $amount = $this->parseAmount($mapped['amount'] ?? 0);
+                $debit = null;
+                $credit = null;
+                if ($amount < 0) {
+                    $debit = abs($amount);
+                } else {
+                    $credit = $amount;
+                }
+
+                $operationNumber = trim(
+                    (string) ($mapped['reference'] ?? $mapped['cheque'] ?? '')
+                );
+
+                if ($operationNumber === '') {
+                    return null;
+                }
+
+                $description = trim((string) ($mapped['description'] ?? ''));
+                if (! empty($mapped['complement'])) {
+                    $description = trim($description.' · '.$mapped['complement']);
+                }
+
+                $referenceParts = array_filter([
+                    $mapped['sucursal'] ?? null,
+                    $mapped['canal'] ?? null,
+                ], fn ($part) => trim((string) $part) !== '');
+
+                return [
+                    'operation_number' => $operationNumber,
+                    'description' => $description ?: null,
+                    'reference' => $referenceParts ? implode(' / ', $referenceParts) : null,
+                    'operation_date' => $this->castDateValue($mapped['operation_date'] ?? null),
+                    'value_date' => $this->castDateValue($mapped['operation_date'] ?? null),
+                    'transaction_time' => $this->parseTimeValue($mapped['transaction_time'] ?? null),
+                    'office' => $mapped['sucursal'] ?? null,
+                    'debit_amount' => $debit,
+                    'credit_amount' => $credit,
+                    'running_balance' => $this->parseNumeric($mapped['balance'] ?? null),
+                    'currency' => 'BOB',
+                    'raw_payload' => $mapped,
+                ];
+            },
+            strictHeaders: true,
+            formatLabel: 'Banco BISA'
+        );
+    }
+
+    private function parseMercantilSheet(string $path): array
+    {
+        $rows = $this->parseExcelRows($path);
+        if (empty($rows)) {
+            return [];
+        }
+
+        $headers = array_map([$this, 'normalizeHeader'], array_shift($rows));
+
+        $required = [
+            'fecha' => 'operation_date',
+            'hora' => 'transaction_time',
+            'cod_bca' => 'operation_number',
+            'doc_depositante' => 'document',
+            'nombre_denominacion_depositante' => 'depositante',
+            'tipo_transact' => 'tipo',
+            'descripcion' => 'description',
+            'glosa' => 'glosa',
+            'oficina' => 'office',
+            'nom_destinatario' => 'destinatario',
+            'debito' => 'debit',
+            'credito' => 'credit',
+            'saldo' => 'balance',
+        ];
+
+        $positions = [];
+        foreach ($required as $header => $alias) {
+            $index = array_search($header, $headers, true);
+            if ($index === false) {
+                throw new InvalidArgumentException('El archivo no coincide con el formato de Banco Mercantil.');
+            }
+            $positions[$alias] = $index;
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $operationNumber = trim((string) ($row[$positions['operation_number']] ?? ''));
+            if ($operationNumber === '') {
+                continue;
+            }
+
+            $descriptionParts = array_filter([
+                $row[$positions['description']] ?? null,
+                $row[$positions['glosa']] ?? null,
+                $row[$positions['tipo']] ?? null,
+            ], fn ($part) => trim((string) $part) !== '');
+
+            $referenceParts = array_filter([
+                $row[$positions['depositante']] ?? null,
+                $row[$positions['destinatario']] ?? null,
+                $row[$positions['office']] ?? null,
+            ], fn ($part) => trim((string) $part) !== '');
+
+            $normalized[] = [
+                'operation_number' => $operationNumber,
+                'description' => $descriptionParts ? implode(' · ', $descriptionParts) : null,
+                'reference' => $referenceParts ? implode(' / ', $referenceParts) : null,
+                'operation_date' => $this->castDateValue($row[$positions['operation_date']] ?? null),
+                'value_date' => $this->castDateValue($row[$positions['operation_date']] ?? null),
+                'transaction_time' => $this->parseTimeValue($row[$positions['transaction_time']] ?? null),
+                'office' => $row[$positions['office']] ?? null,
+                'debit_amount' => $this->parseNumeric($row[$positions['debit']] ?? null),
+                'credit_amount' => $this->parseNumeric($row[$positions['credit']] ?? null),
+                'running_balance' => $this->parseNumeric($row[$positions['balance']] ?? null),
+                'raw_payload' => $row,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function parseUnionSheet(string $path): array
+    {
+        return $this->parseStructuredXls(
+            $path,
+            [
+                'operation_date' => ['fecha_movimiento', 'fecha'],
+                'ag' => ['ag', 'agencia'],
+                'description' => ['descripcion'],
+                'operation_number' => ['nro_documento', 'documento'],
+                'amount' => ['monto'],
+                'balance' => ['saldo'],
+            ],
+            function (array $mapped, array $rawRow, int $position) {
+                $amount = $this->parseAmount($mapped['amount'] ?? 0);
+                $description = strtolower(trim((string) ($mapped['description'] ?? '')));
+
+                $isDebit = $amount < 0
+                    || str_contains($description, 'n/d')
+                    || str_contains($description, 'debito')
+                    || str_contains($description, 'cargo');
+
+                $debit = $isDebit ? abs($amount) : null;
+                $credit = $isDebit ? null : $amount;
+
+                $operationNumber = trim((string) ($mapped['operation_number'] ?? ''));
+                if ($operationNumber === '') {
+                    $operationNumber = strtoupper(substr(sha1(implode('|', [
+                        $mapped['operation_date'] ?? '',
+                        $mapped['ag'] ?? '',
+                        $mapped['description'] ?? '',
+                        $mapped['amount'] ?? '',
+                        $position,
+                    ])), 0, 16));
+                }
+
+                return [
+                    'operation_number' => $operationNumber,
+                    'description' => $mapped['description'] ?? null,
+                    'reference' => $mapped['ag'] ?? null,
+                    'operation_date' => $this->castDateValue($mapped['operation_date'] ?? null),
+                    'value_date' => $this->castDateValue($mapped['operation_date'] ?? null),
+                    'transaction_time' => null,
+                    'office' => $mapped['ag'] ?? null,
+                    'debit_amount' => $debit,
+                    'credit_amount' => $credit,
+                    'running_balance' => $this->parseNumeric($mapped['balance'] ?? null),
+                    'currency' => 'BOB',
+                    'raw_payload' => $mapped,
+                ];
+            },
+            minMatches: 4,
+            strictHeaders: true,
+            formatLabel: 'Banco Unión'
+        );
+    }
+
+    private function normalizeOperationKey(null|string $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $clean = Str::of($value)
+            ->ascii()
+            ->lower()
+            ->replace(' ', '')
+            ->value();
+
+        if ($clean === '') {
+            return '';
+        }
+
+        if (preg_match('/^-?[0-9.,]+$/', $clean)) {
+            $numeric = str_replace([',', '.'], '', $clean);
+            $numeric = ltrim($numeric, '0');
+
+            return $numeric === '' ? '0' : $numeric;
+        }
+
+        return $clean;
     }
 
     private function parseTabValue(?string $value): ?string
@@ -361,10 +945,21 @@ class BankStatementImporter
         return $trimmed === '' ? null : $trimmed;
     }
 
-    private function castDateValue(null|string|Carbon $value): ?Carbon
+    private function castDateValue(null|string|int|float|Carbon $value): ?Carbon
     {
         if ($value instanceof Carbon) {
             return $value;
+        }
+
+        if (is_numeric($value)) {
+            $numeric = (float) $value;
+            if ($numeric <= 0) {
+                return null;
+            }
+
+            $timestamp = ($numeric - 25569) * 86400;
+
+            return Carbon::createFromTimestampUTC($timestamp);
         }
 
         $value = $this->parseTabValue($value);
@@ -373,6 +968,22 @@ class BankStatementImporter
         }
 
         try {
+            if (preg_match('/^\d{1,2}\/\d{1,2}\/\d{2}$/', $value)) {
+                return Carbon::createFromFormat('d/m/y', $value);
+            }
+
+            if (preg_match('/^\d{1,2}\/\d{1,2}\/\d{4}$/', $value)) {
+                return Carbon::createFromFormat('d/m/Y', $value);
+            }
+
+            if (preg_match('/^\d{1,2}-\d{1,2}-\d{2}$/', $value)) {
+                return Carbon::createFromFormat('d-m-y', $value);
+            }
+
+            if (preg_match('/^\d{1,2}-\d{1,2}-\d{4}$/', $value)) {
+                return Carbon::createFromFormat('d-m-Y', $value);
+            }
+
             return Carbon::parse($value);
         } catch (\Throwable) {
             return null;

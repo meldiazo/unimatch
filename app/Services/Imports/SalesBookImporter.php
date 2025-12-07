@@ -5,6 +5,8 @@ namespace App\Services\Imports;
 use App\Models\ImportBatch;
 use App\Models\SalesBookEntry;
 use App\Models\User;
+use App\Support\BinaryXlsReader;
+use App\Support\SimpleXlsxReader;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -44,8 +46,34 @@ class SalesBookImporter
             'status' => 'processing',
         ]);
 
+        $invoiceNumbers = collect($rows)
+            ->map(fn ($row) => $this->normalizeInvoiceNumber($row['invoice_number'] ?? null))
+            ->filter()
+            ->unique();
+
+        $existingInvoices = $invoiceNumbers->isNotEmpty()
+            ? SalesBookEntry::whereIn('invoice_number', $invoiceNumbers->all())
+                ->pluck('invoice_number')
+                ->map(fn ($value) => $this->normalizeInvoiceNumber($value))
+                ->filter()
+                ->flip()
+                ->all()
+            : [];
+
+        $seenInFile = [];
         $inserted = 0;
+        $duplicates = 0;
         foreach ($rows as $index => $row) {
+            $normalizedInvoice = $this->normalizeInvoiceNumber($row['invoice_number'] ?? null);
+            if ($normalizedInvoice) {
+                if (isset($existingInvoices[$normalizedInvoice]) || isset($seenInFile[$normalizedInvoice])) {
+                    $duplicates++;
+                    continue;
+                }
+
+                $seenInFile[$normalizedInvoice] = true;
+            }
+
             SalesBookEntry::create([
                 'import_batch_id' => $batch->id,
                 'row_number' => $index + 1,
@@ -71,38 +99,64 @@ class SalesBookImporter
             'status' => 'completed',
             'summary_data' => [
                 'lines' => $inserted,
+                'duplicates_omitted' => $duplicates,
             ],
         ]);
 
+        $message = "Libro de ventas importado: {$inserted} líneas registradas.";
+        if ($duplicates > 0) {
+            $message .= " Duplicados omitidos: {$duplicates}.";
+        }
+
         return [
-            'message' => "Libro de ventas importado: {$inserted} líneas registradas.",
+            'message' => $message,
             'summary' => [
                 'lines' => $inserted,
                 'batch_id' => $batch->id,
+                'duplicates_omitted' => $duplicates,
             ],
         ];
     }
 
     private function parseSheet(string $path): array
     {
-        $content = @file_get_contents($path);
-        if ($content === false) {
-            return [];
-        }
-
-        $content = $this->normalizeEncoding($content);
-        $rawRows = str_contains(strtolower($content), '<table')
-            ? $this->parseHtmlTable($content)
-            : $this->parseDelimited($content);
+        $rawRows = $this->extractRows($path);
 
         if (empty($rawRows)) {
             return [];
         }
 
         $headers = array_map(fn ($header) => $this->normalizeHeader($header), array_shift($rawRows));
-        $fechaKeys = array_keys(array_filter($headers, fn ($header) => $header === 'fecha'));
-        $invoiceDateKey = array_shift($fechaKeys);
-        $recordedDateKey = array_shift($fechaKeys);
+        $requiredMap = [
+            'nro' => 'legacy_number',
+            'fecha' => 'invoice_date',
+            'numero_factura' => 'invoice_number',
+            'numero_de_factura' => 'invoice_number',
+            'numero_factura_' => 'invoice_number',
+            'numero_factura__' => 'invoice_number',
+            'nit_ci' => 'nit_ci',
+            'nit_c_i' => 'nit_ci',
+            'razon_social' => 'razon_social',
+            'nombre_estudiante' => 'student_name',
+            'tipo_pago' => 'payment_type',
+            'monto' => 'amount',
+            'cuenta' => 'account_label',
+            'estado' => 'state_label',
+        ];
+
+        $positions = [];
+        foreach ($headers as $index => $header) {
+            if (isset($requiredMap[$header]) && ! isset($positions[$requiredMap[$header]])) {
+                $positions[$requiredMap[$header]] = $index;
+            }
+        }
+
+        $requiredFields = ['invoice_date', 'invoice_number', 'amount'];
+        foreach ($requiredFields as $field) {
+            if (! isset($positions[$field])) {
+                throw new \InvalidArgumentException('El archivo no coincide con el formato del reporte diario.');
+            }
+        }
 
         $rows = [];
         foreach ($rawRows as $row) {
@@ -110,35 +164,23 @@ class SalesBookImporter
                 continue;
             }
 
-            $data = [];
-            foreach ($headers as $index => $header) {
-                $data[$header.'__'.$index] = $row[$index] ?? null;
-            }
-
             $mapped = [
-                'legacy_number' => $this->valueFor($data, ['nro', 'numero']),
-                'invoice_number' => $this->valueFor($data, ['numero_de_factura', 'numero_factura', 'nro_factura']),
-                'nit_ci' => $this->valueFor($data, ['nit_ci', 'nit']),
-                'razon_social' => $this->valueFor($data, ['razon_social']),
-                'student_name' => $this->valueFor($data, ['nombre_estudiante', 'nombre']),
-                'payment_type' => $this->valueFor($data, ['tipo_de_pago', 'tipo_pago']),
-                'amount' => $this->parseAmount($this->valueFor($data, ['monto', 'importe'])),
-                'account_label' => $this->valueFor($data, ['cuenta', 'cuenta_bancaria']),
-                'state_label' => $this->valueFor($data, ['estado', 'estado_factura']),
-                'custom_id' => $this->valueFor($data, ['id', 'codigo']),
-                'bank_name' => $this->valueFor($data, ['banco']),
-                'raw_payload' => $data,
+                'legacy_number' => $this->valueFromPositions($row, $positions, 'legacy_number'),
+                'invoice_number' => $this->valueFromPositions($row, $positions, 'invoice_number'),
+                'nit_ci' => $this->valueFromPositions($row, $positions, 'nit_ci'),
+                'razon_social' => $this->valueFromPositions($row, $positions, 'razon_social'),
+                'student_name' => $this->valueFromPositions($row, $positions, 'student_name'),
+                'payment_type' => $this->valueFromPositions($row, $positions, 'payment_type'),
+                'amount' => $this->parseAmount($this->valueFromPositions($row, $positions, 'amount')),
+                'account_label' => $this->valueFromPositions($row, $positions, 'account_label'),
+                'state_label' => $this->valueFromPositions($row, $positions, 'state_label'),
+                'invoice_date' => $this->parseDateValue($this->valueFromPositions($row, $positions, 'invoice_date')),
+                'recorded_date' => null,
+                'custom_id' => null,
+                'bank_name' => null,
+                'operation_reference' => null,
+                'raw_payload' => $row,
             ];
-
-            if ($invoiceDateKey !== null) {
-                $mapped['invoice_date'] = $this->parseDateValue($data['fecha__'.$invoiceDateKey] ?? null);
-            }
-
-            if ($recordedDateKey !== null) {
-                $mapped['recorded_date'] = $this->parseDateValue($data['fecha__'.$recordedDateKey] ?? null);
-            } else {
-                $mapped['recorded_date'] = $mapped['invoice_date'];
-            }
 
             if (empty($mapped['invoice_number']) && $mapped['amount'] === 0.0) {
                 continue;
@@ -148,6 +190,13 @@ class SalesBookImporter
         }
 
         return $rows;
+    }
+
+    private function normalizeInvoiceNumber(?string $value): ?string
+    {
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     private function parseHtmlTable(string $content): array
@@ -182,11 +231,52 @@ class SalesBookImporter
                 continue;
             }
 
-            $separator = str_contains($line, "\t") ? "\t" : ',';
+            if (str_contains($line, "\t")) {
+                $separator = "\t";
+            } elseif (str_contains($line, ';')) {
+                $separator = ';';
+            } else {
+                $separator = ',';
+            }
+
             $rows[] = array_map('trim', str_getcsv($line, $separator));
         }
 
         return $rows;
+    }
+
+    private function extractRows(string $path): array
+    {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($extension === 'xlsx') {
+            return SimpleXlsxReader::extractRows($path);
+        }
+
+        if ($extension === 'xls') {
+            return BinaryXlsReader::extractRows($path);
+        }
+
+        $content = @file_get_contents($path);
+        if ($content === false) {
+            return [];
+        }
+
+        $content = $this->normalizeEncoding($content);
+
+        return str_contains(strtolower($content), '<table')
+            ? $this->parseHtmlTable($content)
+            : $this->parseDelimited($content);
+    }
+
+    private function valueFromPositions(array $row, array $positions, string $key): ?string
+    {
+        if (! isset($positions[$key])) {
+            return null;
+        }
+
+        $index = $positions[$key];
+
+        return isset($row[$index]) ? trim((string) $row[$index]) : null;
     }
 
     private function normalizeEncoding(string $content): string
@@ -201,12 +291,17 @@ class SalesBookImporter
 
     private function normalizeHeader(string $header): string
     {
-        return Str::of($header)
+        $clean = Str::of($header)
             ->lower()
+            ->replace(["\xc2\xa0"], ' ')
+            ->replace(['º', '°'], 'o')
             ->replace(['.', '-', '/', '  '], [' ', ' ', ' ', ' '])
-            ->replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'])
-            ->snake()
-            ->value();
+            ->replace(['á', 'é', 'í', 'ó', 'ú', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'n'])
+            ->replace(['#'], 'numero');
+
+        $clean = preg_replace('/[^a-z0-9\s]/', '', $clean) ?? '';
+
+        return Str::of($clean)->snake()->value();
     }
 
     private function valueFor(array $row, array $candidates): ?string
@@ -225,6 +320,38 @@ class SalesBookImporter
     {
         if (! $value) {
             return null;
+        }
+
+        $value = trim($value);
+
+        if (is_numeric($value)) {
+            $excelSerial = (float) $value;
+            if ($excelSerial > 0) {
+                try {
+                    return Carbon::createFromTimestamp((int) round(($excelSerial - 25569) * 86400));
+                } catch (\Throwable) {
+                    // Ignorar y probar otros formatos
+                }
+            }
+        }
+
+        $formats = [
+            'd/m/y H:i:s',
+            'd/m/Y H:i:s',
+            'd/m/y H:i',
+            'd/m/Y H:i',
+            'd/m/y',
+            'd/m/Y',
+            'Y-m-d H:i:s',
+            'Y-m-d',
+        ];
+
+        foreach ($formats as $format) {
+            try {
+                return Carbon::createFromFormat($format, $value);
+            } catch (\Throwable) {
+                continue;
+            }
         }
 
         try {

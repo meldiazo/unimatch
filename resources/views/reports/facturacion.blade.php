@@ -1,6 +1,6 @@
 @extends('layouts.ingresos')
 
-@section('title', 'Reporte de Pagos | UniMatch')
+@section('title', 'Reporte diario | UniMatch')
 
 @php
   $user = auth()->user();
@@ -21,8 +21,8 @@
     <div class="container-fluid">
       <div class="row mb-2 align-items-center">
         <div class="col-sm-8">
-          <h1 class="m-0">Reporte de Pagos y Facturación</h1>
-          <small class="text-muted">Datos consolidados desde vouchers recibidos.</small>
+          <h1 class="m-0">Reporte diario de ingresos</h1>
+          <small class="text-muted">Datos consolidados desde el libro diario y conciliaciones.</small>
         </div>
         <div class="col-sm-4 text-sm-right">
           <a href="{{ route('reports.pagos', array_merge(request()->all(), ['export' => 'csv'])) }}" class="btn btn-sm btn-outline-brand mr-2">
@@ -104,6 +104,7 @@
                 <th>ID</th>
                 <th>Banco</th>
                 <th>Fecha registro</th>
+                <th>N° operación</th>
               </tr>
             </thead>
             <tbody>
@@ -126,10 +127,11 @@
                   <td>{{ $row['custom_id'] }}</td>
                   <td>{{ $row['banco'] }}</td>
                   <td>{{ $row['fecha_registro'] }}</td>
+                  <td>{{ $row['operation_reference'] ?? '—' }}</td>
                 </tr>
               @empty
                 <tr>
-                  <td colspan="13" class="text-center text-muted py-4">No hay información cargada.</td>
+                  <td colspan="14" class="text-center text-muted py-4">No hay información cargada.</td>
                 </tr>
               @endforelse
             </tbody>

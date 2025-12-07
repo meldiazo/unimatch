@@ -24,6 +24,8 @@ class BankStatementLine extends Model
         'transaction_time',
         'debit_amount',
         'credit_amount',
+        'custom_identifier',
+        'billing_reference_date',
         'raw_payload',
     ];
 
@@ -35,6 +37,7 @@ class BankStatementLine extends Model
         'transaction_time' => 'datetime:H:i:s',
         'debit_amount' => 'decimal:2',
         'credit_amount' => 'decimal:2',
+        'billing_reference_date' => 'date',
         'raw_payload' => 'array',
     ];
 

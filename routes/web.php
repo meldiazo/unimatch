@@ -10,13 +10,13 @@ use App\Http\Controllers\Import\SalesBookImportController;
 use App\Http\Controllers\Import\VoucherImportController;
 use App\Http\Controllers\Income\MatchingController;
 use App\Http\Controllers\Income\VoucherController as IncomeVoucherController;
+use App\Http\Controllers\Income\SalesReportController;
 use App\Http\Controllers\Income\StatementController;
+use App\Http\Controllers\Income\ReconciliationReportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\Student\VoucherController as StudentVoucherController;
 use App\Http\Controllers\Cashier\TransactionController as CashierTransactionController;
-use App\Http\Controllers\Cashier\BillingStatusController;
-use App\Http\Controllers\Admin\ReconciliationReviewController;
 use App\Http\Middleware\CheckRole;
 use App\Models\Bank;
 use App\Models\PaymentVoucher;
@@ -48,9 +48,6 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
             \App\Http\Controllers\Cashier\VoucherController::class, 'downloadCertificate'
         ])->name('cashier.vouchers.certificate');
 
-        Route::patch('/cajero/vouchers/{voucher}/billing', [
-            BillingStatusController::class, 'update'
-        ])->name('cajero.billing.update');
     });
 
     // ========== RUTAS ESTUDIANTE ==========
@@ -99,23 +96,7 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
                     ],
                 ]);
             })(),
-            User::ROLE_CAJERO => (function () {
-                $banks = \App\Models\Bank::orderBy('name')->get();
-                $facturacionVouchers = PaymentVoucher::with(['student', 'bank'])
-                    ->whereIn('status', ['conciliado', 'demasia'])
-                    ->latest('paid_at')
-                    ->take(50)
-                    ->get();
-
-                return view('dashboards.cajero', [
-                    'banks' => $banks,
-                    'facturacionVouchers' => $facturacionVouchers,
-                    'billingOptions' => [
-                        'pendiente' => 'Pendiente',
-                        'facturado' => 'Facturado',
-                    ],
-                ]);
-            })(),
+            User::ROLE_CAJERO => view('dashboards.cajero'),
             default => view('dashboards.estudiante', [
                 'banks' => Bank::with('accounts')->get(),
                 'studentRecord' => $studentRecord,
@@ -149,9 +130,33 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
         ->name('ingresos.vouchers.update');
     Route::post('/ingresos/conciliacion/confirmar', MatchingController::class)
         ->name('ingresos.matching.confirm');
+    Route::options('/ingresos/conciliacion/confirmar', function () {
+        return response()->noContent();
+    });
     Route::get('/ingresos/extractos', [StatementController::class, 'index'])
-        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad,cajero'])
         ->name('ingresos.statements.index');
+    Route::get('/ingresos/extractos/export', [StatementController::class, 'export'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad,cajero'])
+        ->name('ingresos.statements.export');
+    Route::patch('/ingresos/extractos/{line}', [StatementController::class, 'update'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad'])
+        ->name('ingresos.statements.update');
+    Route::get('/ingresos/reporte-diario', [SalesReportController::class, 'index'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad,cajero'])
+        ->name('ingresos.sales-report.index');
+    Route::get('/ingresos/reporte-diario/export', [SalesReportController::class, 'export'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad,cajero'])
+        ->name('ingresos.sales-report.export');
+    Route::patch('/ingresos/reporte-diario/{entry}', [SalesReportController::class, 'update'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad'])
+        ->name('ingresos.sales-report.update');
+    Route::get('/ingresos/reporte-conciliaciones', [ReconciliationReportController::class, 'index'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad,cajero'])
+        ->name('ingresos.reconciliation-report.index');
+    Route::get('/ingresos/reporte-conciliaciones/export', [ReconciliationReportController::class, 'export'])
+        ->middleware([CheckRole::class.':encargado_ingresos,jefe_contabilidad,cajero'])
+        ->name('ingresos.reconciliation-report.export');
 
     Route::post('/estudiante/vouchers', [StudentVoucherController::class, 'store'])
         ->name('student.vouchers.store');
@@ -180,7 +185,6 @@ Route::middleware(['auth', 'verified'])->group(function () use ($renderExecutive
 
         Route::get('settings/reconciliation', [ReconciliationSettingController::class, 'edit'])->name('settings.reconciliation.edit');
         Route::put('settings/reconciliation', [ReconciliationSettingController::class, 'update'])->name('settings.reconciliation.update');
-        Route::get('reconciliations', [ReconciliationReviewController::class, 'index'])->name('reconciliations.index');
         Route::get('banks/{bank}/format', [AdminBankController::class, 'editFormat'])->name('banks.format');
         Route::put('banks/{bank}/format', [AdminBankController::class, 'updateFormat'])->name('banks.format.update');
         Route::resource('banks', AdminBankController::class)->except(['show']);

@@ -146,111 +146,16 @@
             </div>
           @else
             <div class="card card-outline card-brand mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h3 class="card-title mb-0"><i class="fas fa-upload mr-2"></i>Subir nuevo voucher</h3>
-              <span class="badge badge-info">Adjunta PDF o imagen</span>
-            </div>
-            <div class="card-body">
-              @if (! $studentRecord)
-                <div class="alert alert-warning">
-                  No encontramos tu registro en el padrón de estudiantes. Comunícate con ingresos para habilitar tu acceso.
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0"><i class="fas fa-ban mr-2"></i>Registro de vouchers deshabilitado</h3>
+              </div>
+              <div class="card-body">
+                <div class="alert alert-info mb-0">
+                  El registro manual de vouchers ya no está disponible. Todas las conciliaciones se realizan a partir de los extractos bancarios y el reporte diario de ingresos.
+                  Si necesitas regularizar un pago, comunícate con el área de ingresos.
                 </div>
-              @else
-                <form action="{{ route('student.vouchers.store') }}" method="POST" enctype="multipart/form-data">
-                  @csrf
-                  <div class="form-row">
-                    <div class="form-group col-md-6">
-                      <label for="student-code">Código de estudiante</label>
-                      <input
-                        type="text"
-                        name="student_code"
-                        id="student-code"
-                        class="form-control @error('student_code') is-invalid @enderror"
-                        value="{{ old('student_code', $studentRecord->code ?? '') }}"
-                        placeholder="Ej: 20210001"
-                        required
-                      >
-                      @error('student_code')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
-                    <div class="form-group col-md-6">
-                      <label for="student-bank">Banco (opcional)</label>
-                      <select name="bank_id" id="student-bank" class="form-control @error('bank_id') is-invalid @enderror">
-                        <option value="">Selecciona banco</option>
-                        @foreach ($banks as $bank)
-                          <option value="{{ $bank->id }}" {{ old('bank_id') == $bank->id ? 'selected' : '' }}>{{ $bank->name }}</option>
-                        @endforeach
-                      </select>
-                      @error('bank_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
-                    <div class="form-group col-md-6">
-                      <label for="student-account-select">Cuenta bancaria (opcional)</label>
-                      <select name="bank_account_id" id="student-account-select" class="form-control @error('bank_account_id') is-invalid @enderror">
-                        <option value="">Selecciona cuenta</option>
-                        @foreach ($banks as $bank)
-                          @foreach ($bank->accounts as $account)
-                            <option value="{{ $account->id }}" data-bank="{{ $bank->id }}" {{ old('bank_account_id') == $account->id ? 'selected' : '' }}>
-                              {{ $bank->short_code }} · {{ $account->account_number }}
-                            </option>
-                          @endforeach
-                        @endforeach
-                      </select>
-                      @error('bank_account_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
-                    <div class="form-group col-md-3">
-                      <label for="student-paid-at">Fecha del pago</label>
-                      <input type="date" name="paid_at" id="student-paid-at" class="form-control @error('paid_at') is-invalid @enderror" value="{{ old('paid_at') }}" required>
-                      @error('paid_at')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
-                    <div class="form-group col-md-3">
-                      <label for="student-amount">Monto (Bs.)</label>
-                      <input type="number" step="0.01" name="amount" id="student-amount" class="form-control @error('amount') is-invalid @enderror" value="{{ old('amount') }}" required>
-                      @error('amount')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group col-md-4">
-                      <label for="student-payment-type">Tipo de pago</label>
-                      @php
-                        $studentPaymentType = old('payment_type', 'Transferencia');
-                      @endphp
-                      <select name="payment_type" id="student-payment-type" class="form-control @error('payment_type') is-invalid @enderror" required>
-                        <option value="Transferencia" {{ $studentPaymentType === 'Transferencia' ? 'selected' : '' }}>Transferencia</option>
-                        <option value="Depósito" {{ $studentPaymentType === 'Depósito' ? 'selected' : '' }}>Depósito</option>
-                        <option value="QR" {{ $studentPaymentType === 'QR' ? 'selected' : '' }}>QR</option>
-                      </select>
-                      @error('payment_type')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                    </div>
-                    <div class="form-group col-md-4">
-                      <label for="student-operation">N° de operación</label>
-                      <input type="text" name="operation_number" id="student-operation" class="form-control @error('operation_number') is-invalid @enderror" value="{{ old('operation_number') }}" required>
-                      @error('operation_number')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                      @enderror
-                  </div>
-                  <div class="form-group">
-                    <label for="student-file">Comprobante (.pdf, .jpg, .png)</label>
-                    <input type="file" name="voucher_file" id="student-file" class="form-control-file @error('voucher_file') is-invalid @enderror" required>
-                    @error('voucher_file')
-                      <div class="invalid-feedback d-block">{{ $message }}</div>
-                    @enderror
-                  </div>
-                  <button type="submit" class="btn btn-brand">Enviar voucher</button>
-                </form>
-              @endif
+              </div>
             </div>
-          </div>
 
           <div class="card card-outline card-brand">
             <div class="card-header">
@@ -322,41 +227,6 @@
 
 @push('scripts')
 <script>
-  const setupStudentAccounts = () => {
-    const bankSelect = document.getElementById('student-bank');
-    const accountSelect = document.getElementById('student-account-select');
-
-    if (!bankSelect || !accountSelect) {
-      return;
-    }
-
-    const baseOptions = Array.from(accountSelect.querySelectorAll('option[data-bank]'));
-    const placeholder = accountSelect.querySelector('option[value=""]');
-
-    const renderAccounts = () => {
-      const selectedBank = bankSelect.value;
-      const previous = accountSelect.value;
-      accountSelect.innerHTML = '';
-
-      if (placeholder) {
-        accountSelect.appendChild(placeholder.cloneNode(true));
-      }
-
-      baseOptions.forEach((option) => {
-        if (!selectedBank || option.dataset.bank === selectedBank) {
-          accountSelect.appendChild(option.cloneNode(true));
-        }
-      });
-
-      if (previous) {
-        accountSelect.value = previous;
-      }
-    };
-
-    renderAccounts();
-    bankSelect.addEventListener('change', renderAccounts);
-  };
-
   const loadStudentBalance = async () => {
     try {
       const response = await fetch('/api/student/balance', {
@@ -424,8 +294,6 @@
 
     @if ($activeView === 'balance')
       loadStudentBalance();
-    @else
-      setupStudentAccounts();
     @endif
   });
 </script>

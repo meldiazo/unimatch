@@ -3,10 +3,10 @@
 namespace App\Support;
 
 use App\Models\Bank;
-use App\Models\PaymentVoucher;
-use App\Models\Student;
+use App\Models\SalesBookEntry;
 use App\Models\StudentBalance;
 use App\Models\Transaction;
+use App\Support\StudentBalanceProjector;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -14,21 +14,23 @@ class ExecutiveDashboardBuilder
 {
     public function build(): array
     {
+        app(StudentBalanceProjector::class)->sync();
         $today = Carbon::today();
 
+        $conciliatedStates = ['conciliado', 'demasia'];
+
         $totals = [
-            'facturado_hoy' => (float) PaymentVoucher::whereDate('paid_at', $today)
-                ->where('billing_status', 'facturado')
+            'facturado_hoy' => (float) SalesBookEntry::whereDate('invoice_date', $today)
+                ->whereIn('state_label', $conciliatedStates)
                 ->sum('amount'),
-            'operaciones_facturadas' => PaymentVoucher::where('billing_status', 'facturado')->count(),
-            'operaciones_sin_factura' => PaymentVoucher::where('billing_status', '!=', 'facturado')->count(),
-            'alertas' => Transaction::where(function ($query) {
-                $query->whereNotNull('difference_amount')
-                    ->where('difference_amount', '!=', 0);
-            })->count(),
+            'operaciones_facturadas' => SalesBookEntry::whereIn('state_label', $conciliatedStates)->count(),
+            'operaciones_sin_factura' => SalesBookEntry::whereNotIn('state_label', $conciliatedStates)->count(),
+            'alertas' => Transaction::whereNotNull('difference_amount')
+                ->where('difference_amount', '!=', 0)
+                ->count(),
         ];
 
-        $alertas = Transaction::with(['line.statement.account.bank', 'voucher.student'])
+        $alertas = Transaction::with(['line.statement.account.bank', 'salesEntry'])
             ->where(function ($query) {
                 $query->whereNotNull('difference_amount')
                     ->where('difference_amount', '!=', 0);
@@ -38,62 +40,22 @@ class ExecutiveDashboardBuilder
             ->get()
             ->map(function (Transaction $transaction) {
                 $difference = (float) ($transaction->difference_amount ?? 0);
+                $entry = $transaction->salesEntry;
 
                 return [
                     'id' => $transaction->id,
                     'bank' => $transaction->line?->statement?->account?->bank?->name ?? 'Banco no identificado',
-                    'student' => $transaction->voucher?->student?->full_name ?? 'Sin estudiante',
-                    'amount' => (float) ($transaction->line?->amount ?? 0),
+                    'student' => $entry?->student_name ?? 'Sin estudiante',
+                    'amount' => (float) ($entry?->amount ?? $transaction->line?->amount ?? 0),
                     'difference' => $difference,
                     'status' => $transaction->status ?? 'flagged',
                     'date' => optional($transaction->matched_at ?? $transaction->created_at)?->format('d/m/Y') ?? now()->format('d/m/Y'),
                 ];
             });
 
-        $bankSummaries = Bank::withSum('vouchers as total_amount', 'amount')
-            ->withSum(['vouchers as facturado_amount' => function ($query) {
-                $query->where('billing_status', 'facturado');
-            }], 'amount')
-            ->get()
-            ->map(function (Bank $bank) {
-                return [
-                    'bank' => $bank->name,
-                    'short_code' => $bank->short_code,
-                    'total' => (float) ($bank->total_amount ?? 0),
-                    'facturado' => (float) ($bank->facturado_amount ?? 0),
-                ];
-            });
+        $bankSummaries = $this->buildBankSummaries();
 
-        $facturacion = PaymentVoucher::with(['student', 'bank'])
-            ->whereIn('status', ['conciliado', 'demasia'])
-            ->latest('paid_at')
-            ->take(20)
-            ->get();
-
-        $latestPayments = PaymentVoucher::select('student_id', DB::raw('MAX(paid_at) as last_paid_at'))
-            ->groupBy('student_id')
-            ->pluck('last_paid_at', 'student_id');
-
-        $balances = StudentBalance::select('student_id', DB::raw('SUM(balance_amount) as amount'))
-            ->groupBy('student_id')
-            ->pluck('amount', 'student_id');
-
-        $studentRows = Student::orderBy('full_name')
-            ->take(20)
-            ->get()
-            ->map(function (Student $student) use ($latestPayments, $balances) {
-                $lastPayment = $latestPayments->get($student->id);
-
-                return [
-                    'name' => $student->full_name,
-                    'code' => $student->code,
-                    'last_payment' => $lastPayment
-                        ? Carbon::parse($lastPayment)->format('d/m/Y')
-                        : optional($student->updated_at)->format('d/m/Y'),
-                    'balance' => (float) ($balances->get($student->id, 0)),
-                ];
-            })
-            ->values();
+        $studentRows = $this->buildStudentOverpayments();
 
         $trend = $this->buildTrend();
 
@@ -101,7 +63,6 @@ class ExecutiveDashboardBuilder
             'totals' => $totals,
             'alerts' => $alertas,
             'bankSummaries' => $bankSummaries,
-            'facturacion' => $facturacion,
             'students' => $studentRows,
             'trend' => $trend,
         ];
@@ -113,17 +74,18 @@ class ExecutiveDashboardBuilder
         $labels = [];
         $seriesFacturado = [];
         $seriesPendiente = [];
+        $conciliatedStates = ['conciliado', 'demasia'];
 
         for ($i = 0; $i < $days; $i++) {
             $date = (clone $start)->addDays($i);
             $labels[] = $date->format('d/m');
 
-            $seriesFacturado[] = (float) PaymentVoucher::whereDate('paid_at', $date)
-                ->where('billing_status', 'facturado')
+            $seriesFacturado[] = (float) SalesBookEntry::whereDate('invoice_date', $date)
+                ->whereIn('state_label', $conciliatedStates)
                 ->sum('amount');
 
-            $seriesPendiente[] = (float) PaymentVoucher::whereDate('paid_at', $date)
-                ->where('billing_status', '!=', 'facturado')
+            $seriesPendiente[] = (float) SalesBookEntry::whereDate('invoice_date', $date)
+                ->whereNotIn('state_label', $conciliatedStates)
                 ->sum('amount');
         }
 
@@ -132,5 +94,61 @@ class ExecutiveDashboardBuilder
             'facturado' => $seriesFacturado,
             'pendiente' => $seriesPendiente,
         ];
+    }
+
+    private function buildBankSummaries(): array
+    {
+        $latestPerAccount = DB::table('bank_statement_lines as l')
+            ->join('bank_statements as s', 'l.bank_statement_id', '=', 's.id')
+            ->select('s.bank_account_id', DB::raw('MAX(l.id) as latest_line_id'))
+            ->groupBy('s.bank_account_id');
+
+        $latestLines = DB::table('bank_statement_lines as l')
+            ->join('bank_statements as s', 'l.bank_statement_id', '=', 's.id')
+            ->joinSub($latestPerAccount, 'latest', function ($join) {
+                $join->on('s.bank_account_id', '=', 'latest.bank_account_id')
+                    ->on('l.id', '=', 'latest.latest_line_id');
+            })
+            ->join('bank_accounts as ba', 's.bank_account_id', '=', 'ba.id')
+            ->select('ba.bank_id', 'l.running_balance')
+            ->get();
+
+        $balancesByBank = $latestLines
+            ->groupBy('bank_id')
+            ->map(function ($rows) {
+                return (float) $rows->reduce(function ($carry, $item) {
+                    return $carry + (float) ($item->running_balance ?? 0);
+                }, 0);
+            });
+
+        return Bank::orderBy('name')
+            ->get()
+            ->map(function (Bank $bank) use ($balancesByBank) {
+                return [
+                    'bank' => $bank->name,
+                    'short_code' => $bank->short_code,
+                    'balance' => $balancesByBank->get($bank->id, 0.0),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function buildStudentOverpayments(): array
+    {
+        return StudentBalance::with('student')
+            ->orderByDesc('updated_at')
+            ->take(25)
+            ->get()
+            ->filter(fn (StudentBalance $balance) => (float) $balance->balance_amount > 0)
+            ->map(function (StudentBalance $balance) {
+                return [
+                    'name' => $balance->student?->full_name ?? '—',
+                    'balance' => (float) $balance->balance_amount,
+                    'credited_at' => optional($balance->updated_at)->format('d/m/Y') ?? '—',
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

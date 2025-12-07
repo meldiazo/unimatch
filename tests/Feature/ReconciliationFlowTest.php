@@ -7,7 +7,7 @@ use App\Models\BankAccount;
 use App\Models\BankStatement;
 use App\Models\BankStatementLine;
 use App\Models\ImportBatch;
-use App\Models\PaymentVoucher;
+use App\Models\SalesBookEntry;
 use App\Models\Student;
 use App\Models\StudentBalance;
 use App\Models\Transaction;
@@ -54,18 +54,26 @@ class ReconciliationFlowTest extends TestCase
             'currency' => 'BOB',
         ]);
 
-        $voucher = PaymentVoucher::create([
-            'student_id' => $student->id,
-            'bank_id' => $bank->id,
-            'bank_account_id' => $account->id,
-            'operation_number' => 'OP100',
-            'payment_type' => 'Transferencia',
+        $line->update(['custom_identifier' => 'EXT-100']);
+
+        $salesBatch = ImportBatch::create([
+            'import_type' => 'sales_book',
+            'source_name' => 'reporte.csv',
+            'uploaded_by' => $user->id,
+            'status' => 'completed',
+        ]);
+
+        $entry = SalesBookEntry::create([
+            'import_batch_id' => $salesBatch->id,
+            'row_number' => 1,
+            'invoice_date' => now()->toDateString(),
+            'invoice_number' => 'F-100',
+            'student_name' => $student->full_name,
+            'custom_id' => $student->code,
             'amount' => 500.00,
-            'currency' => 'BOB',
-            'paid_at' => now()->toDateString(),
-            'received_at' => now()->toDateString(),
-            'status' => 'recibido',
-            'billing_status' => 'pendiente',
+            'bank_name' => $bank->name,
+            'operation_reference' => 'OP100',
+            'state_label' => 'pendiente',
         ]);
 
         $response = $this
@@ -73,7 +81,7 @@ class ReconciliationFlowTest extends TestCase
             ->postJson(route('ingresos.matching.confirm'), [
                 'action' => 'credit',
                 'bank_statement_line_id' => $line->id,
-                'payment_voucher_id' => $voucher->id,
+                'sales_book_entry_id' => $entry->id,
                 'credit_amount' => 100.00,
             ]);
 
@@ -82,14 +90,14 @@ class ReconciliationFlowTest extends TestCase
                 'action' => 'credit',
             ]);
 
-        $this->assertDatabaseHas('payment_vouchers', [
-            'id' => $voucher->id,
-            'status' => 'demasia',
+        $this->assertDatabaseHas('sales_book_entries', [
+            'id' => $entry->id,
+            'state_label' => 'demasia',
         ]);
 
         $this->assertDatabaseHas('transactions', [
             'bank_statement_line_id' => $line->id,
-            'payment_voucher_id' => $voucher->id,
+            'sales_book_entry_id' => $entry->id,
             'status' => 'demasia',
         ]);
 
@@ -100,78 +108,4 @@ class ReconciliationFlowTest extends TestCase
         $this->assertEquals(1, Transaction::count());
     }
 
-    public function test_cajero_only_marks_facturado_for_valid_vouchers(): void
-    {
-        $cajero = User::factory()->create(['role' => User::ROLE_CAJERO]);
-        $student = Student::factory()->create();
-
-        $voucher = PaymentVoucher::create([
-            'student_id' => $student->id,
-            'operation_number' => 'OP200',
-            'payment_type' => 'Transferencia',
-            'amount' => 400.00,
-            'currency' => 'BOB',
-            'paid_at' => now()->toDateString(),
-            'received_at' => now()->toDateString(),
-            'status' => 'recibido',
-            'billing_status' => 'pendiente',
-        ]);
-
-        $this->actingAs($cajero)
-            ->from('/cajero')
-            ->patch(route('cajero.billing.update', $voucher), [
-                'billing_status' => 'facturado',
-            ])
-            ->assertStatus(302)
-            ->assertSessionHasErrors('billing_status');
-
-        $this->assertEquals('pendiente', $voucher->fresh()->billing_status);
-
-        $conciliated = PaymentVoucher::create([
-            'student_id' => $student->id,
-            'operation_number' => 'OP201',
-            'payment_type' => 'Transferencia',
-            'amount' => 250.00,
-            'currency' => 'BOB',
-            'paid_at' => now()->toDateString(),
-            'received_at' => now()->toDateString(),
-            'status' => 'conciliado',
-            'billing_status' => 'pendiente',
-        ]);
-
-        $this->actingAs($cajero)
-            ->from('/cajero')
-            ->patch(route('cajero.billing.update', $conciliated), [
-                'billing_status' => 'facturado',
-            ])
-            ->assertStatus(302)
-            ->assertSessionHas('status', 'Estado de facturación actualizado.');
-
-        $conciliated->refresh();
-        $this->assertEquals('facturado', $conciliated->billing_status);
-        $this->assertNotNull($conciliated->billed_at);
-        $this->assertEquals($cajero->id, $conciliated->billed_by);
-
-        $demasia = PaymentVoucher::create([
-            'student_id' => $student->id,
-            'operation_number' => 'OP202',
-            'payment_type' => 'Transferencia',
-            'amount' => 250.00,
-            'currency' => 'BOB',
-            'paid_at' => now()->toDateString(),
-            'received_at' => now()->toDateString(),
-            'status' => 'demasia',
-            'billing_status' => 'pendiente',
-        ]);
-
-        $this->actingAs($cajero)
-            ->from('/cajero')
-            ->patch(route('cajero.billing.update', $demasia), [
-                'billing_status' => 'facturado',
-            ])
-            ->assertStatus(302)
-            ->assertSessionHas('status', 'Estado de facturación actualizado.');
-
-        $this->assertEquals('facturado', $demasia->fresh()->billing_status);
-    }
 }

@@ -3,9 +3,12 @@
 namespace App\Support;
 
 use App\Models\BankStatementLine;
-use App\Models\PaymentVoucher;
+use App\Models\SalesBookEntry;
 use App\Models\Transaction;
+use App\Models\StudentBalance;
 use App\Support\ReconciliationSettings;
+use App\Support\StudentBalanceProjector;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +29,7 @@ class MatchingDataBuilder
      */
     public function build(Collection $banks, Collection $students): array
     {
+        app(StudentBalanceProjector::class)->sync();
         $settings = app(ReconciliationSettings::class)->current();
         $differenceThreshold = (float) $settings->difference_alert_threshold;
         $shortageThreshold = (float) $settings->shortage_alert_threshold;
@@ -47,62 +51,82 @@ class MatchingDataBuilder
             ];
         })->values();
 
-        $voucherCandidates = PaymentVoucher::with('student')
-            ->whereNotIn('status', ['conciliado', 'demasia', 'rechazado'])
-            ->latest('received_at')
-            ->take(150)
+        $reportEntries = SalesBookEntry::with('transaction')
+            ->whereDoesntHave('transaction')
+            ->latest('invoice_date')
+            ->latest('id')
+            ->take(200)
             ->get();
 
-        $voucherOperationMap = $voucherCandidates
-            ->filter(fn ($voucher) => filled($voucher->operation_number))
-            ->groupBy(fn ($voucher) => $voucher->operation_number);
+        $overpayments = StudentBalance::with('student')
+            ->where('balance_amount', '>', 0)
+            ->latest('updated_at')
+            ->get()
+            ->map(function (StudentBalance $balance) {
+                $student = $balance->student;
+
+                return [
+                    'id' => 'sb-'.$balance->id,
+                    'student_name' => $student?->full_name ?? 'Sin estudiante',
+                    'student_code' => $student?->code ?? '—',
+                    'balance' => (float) $balance->balance_amount,
+                    'credited_at' => optional($balance->updated_at)?->toDateTimeString(),
+                ];
+            })
+            ->values();
+
+        $entryOperationMap = $reportEntries
+            ->filter(fn ($entry) => filled($entry->operation_reference))
+            ->groupBy(fn ($entry) => $this->normalizeOperationKey($entry->operation_reference));
 
         $transactions = BankStatementLine::with([
             'statement.account.bank',
-            'transaction.voucher.student',
+            'transaction.salesEntry',
         ])
             ->whereDoesntHave('transaction')
             ->latest('operation_date')
             ->take(100)
             ->get()
-            ->map(function (BankStatementLine $line) use ($voucherOperationMap, $differenceThreshold, $shortageThreshold) {
+            ->map(function (BankStatementLine $line) use ($entryOperationMap, $differenceThreshold, $shortageThreshold, $reportEntries) {
                 $status = 'pending';
                 $alert = null;
                 $suggestion = null;
                 $difference = 0;
                 $bank = optional($line->statement?->account?->bank);
-                $voucher = $line->transaction?->voucher;
+                $lineAmount = $this->resolveLineAmount($line);
+                $entry = $line->transaction?->salesEntry;
 
-                if ($line->transaction) {
-                    $status = $line->transaction->status ?? 'matched';
-                    $difference = (float) ($line->transaction->difference_amount ?? 0);
-                } elseif ($line->operation_number && $voucherOperationMap->has($line->operation_number)) {
+                if ($line->operation_number) {
+                    $normalizedOperation = $this->normalizeOperationKey($line->operation_number);
+                    if ($normalizedOperation && $entryOperationMap->has($normalizedOperation)) {
+                        $suggestion = $entryOperationMap->get($normalizedOperation)->first();
+                    }
+                }
+
+                if (! $suggestion && ! $entry) {
+                    $suggestion = $this->findClosestEntryMatch($reportEntries, $lineAmount, $line->operation_date, $differenceThreshold);
+                }
+
+                if ($suggestion && ! $entry) {
                     $status = 'suggested';
-                    $suggestion = $voucherOperationMap->get($line->operation_number)->first();
-                    $difference = $suggestion
-                        ? (float) $line->amount - (float) $suggestion->amount
-                        : 0;
+                    $difference = $lineAmount - (float) $suggestion->amount;
 
-                    if (abs($difference) >= $differenceThreshold) {
+                    if (abs($difference) >= $differenceThreshold && $difference !== 0.0) {
                         $alert = $difference > 0
-                            ? 'El extracto tiene un monto mayor que el voucher.'
-                            : 'El voucher es mayor al monto del extracto.';
+                            ? 'El extracto tiene un monto mayor que el registro diario.'
+                            : 'El registro diario tiene un monto mayor que el extracto.';
                         $status = 'flagged';
                     }
 
                     if ($difference < 0 && abs($difference) >= $shortageThreshold) {
-                        $alert = 'El voucher es menor al monto del extracto.';
+                        $alert = 'El registro diario es menor al monto del extracto.';
                         $status = 'flagged';
                     }
                 }
 
-                $studentName = $this->extractStudentName($voucher)
-                    ?? $this->extractStudentName($suggestion)
-                    ?? 'Por asignar';
-
-                $studentCode = $this->extractStudentCode($voucher)
-                    ?? $this->extractStudentCode($suggestion)
-                    ?? '—';
+                $studentName = $this->resolveEntryName($entry ?? $suggestion);
+                $studentCode = $this->resolveEntryCode($entry ?? $suggestion);
+                $entryStatus = $entry?->state_label ?? $suggestion?->state_label ?? 'pendiente';
 
                 $detailText = $line->description
                     ?? $line->reference
@@ -112,15 +136,15 @@ class MatchingDataBuilder
                 return [
                     'id' => 'tx-'.$line->id,
                     'db_id' => $line->id,
-                    'studentId' => $voucher?->student_id
-                        ?? $suggestion?->student_id,
+                    'update_url' => route('ingresos.statements.update', $line),
+                    'studentId' => null,
                     'student' => $studentName,
                     'student_name' => $studentName,
                     'enrollment' => $studentCode,
                     'student_code' => $studentCode,
                     'bankId' => $bank->id ? (string) $bank->id : null,
                     'bankName' => $bank->name,
-                    'amount' => (float) $line->amount,
+                    'amount' => (float) $lineAmount,
                     'reference' => $detailText,
                     'date' => optional($line->operation_date)?->toDateTimeString()
                         ?? now()->toDateTimeString(),
@@ -130,11 +154,10 @@ class MatchingDataBuilder
                     'alert' => $alert,
                     'operation_number' => $line->operation_number,
                     'difference' => round($difference, 2),
-                    'suggestedVoucherId' => $suggestion?->id,
-                    'billing_status' => $voucher?->billing_status
-                        ?? $suggestion?->billing_status
-                        ?? 'pendiente',
+                    'suggestedEntryId' => $suggestion?->id,
+                    'billing_status' => $entryStatus,
                     'office' => $line->office,
+                    'line_number' => $line->line_number,
                     'debit_amount' => $line->debit_amount !== null
                         ? (float) $line->debit_amount
                         : ($line->amount < 0 ? abs((float) $line->amount) : 0),
@@ -142,72 +165,107 @@ class MatchingDataBuilder
                         ? (float) $line->credit_amount
                         : ($line->amount > 0 ? (float) $line->amount : 0),
                     'running_balance' => $line->running_balance !== null ? (float) $line->running_balance : null,
+                    'custom_id' => $line->custom_identifier,
+                    'billing_reference_date' => optional($line->billing_reference_date)?->toDateString(),
+                    'value_date' => optional($line->value_date)?->toDateString(),
+                    'entry_bank' => $suggestion?->bank_name,
+                    'entry_operation' => $suggestion?->operation_reference,
+                    'bank_name' => $bank->name,
                 ];
             })
             ->values();
 
-        $vouchers = $voucherCandidates->map(function (PaymentVoucher $voucher) {
-            $bank = optional($voucher->bankAccount?->bank ?? $voucher->bank);
-            $studentName = $this->extractStudentName($voucher) ?? 'Sin estudiante';
-            $studentCode = $this->extractStudentCode($voucher) ?? '—';
-            $paymentDate = optional($voucher->paid_at)?->toDateString() ?? now()->toDateString();
-
+        $reportEntriesData = $reportEntries->map(function (SalesBookEntry $entry) {
             return [
-                'id' => 'vc-'.$voucher->id,
-                'db_id' => $voucher->id,
-                'studentId' => $voucher->student_id,
-                'student' => $studentName,
-                'student_name' => $studentName,
-                'enrollment' => $studentCode,
-                'student_code' => $studentCode,
-                'amount' => (float) $voucher->amount,
-                'issueDate' => $paymentDate,
-                'dueDate' => null,
-                'paymentDate' => $paymentDate,
-                'status' => $voucher->status,
-                'bankId' => $bank->id ? (string) $bank->id : null,
-                'bankName' => $bank->name,
-                'operation_number' => $voucher->operation_number,
-                'billing_status' => $voucher->billing_status ?? 'pendiente',
+                'id' => 'sr-'.$entry->id,
+                'db_id' => $entry->id,
+                'update_url' => route('ingresos.sales-report.update', $entry),
+                'student' => $entry->student_name ?? 'Sin estudiante',
+                'student_name' => $entry->student_name ?? 'Sin estudiante',
+                'enrollment' => $entry->custom_id ?? '—',
+                'amount' => (float) $entry->amount,
+                'issueDate' => optional($entry->invoice_date)?->toDateString(),
+                'recorded_date' => optional($entry->recorded_date)?->toDateString(),
+                'status' => $entry->state_label ?? 'pendiente',
+                'bankName' => $entry->bank_name,
+                'bank_name' => $entry->bank_name,
+                'operation_number' => $entry->operation_reference,
+                'operation_reference' => $entry->operation_reference,
+                'row_number' => $entry->row_number,
+                'custom_id' => $entry->custom_id,
+                'nit_ci' => $entry->nit_ci,
+                'razon_social' => $entry->razon_social,
+                'payment_type' => $entry->payment_type,
+                'invoice_number' => $entry->invoice_number,
+                'account' => $entry->account_label,
+                'state_label' => $entry->state_label,
+                'invoice_number' => $entry->invoice_number,
+                'invoice_date' => optional($entry->invoice_date)?->toDateString(),
+                'nit_ci' => $entry->nit_ci,
+                'razon_social' => $entry->razon_social,
             ];
         })->values();
 
         $latestReconciliations = Transaction::with([
-            'voucher.student',
+            'salesEntry',
             'line.statement.account.bank',
+            'matchedBy',
         ])
             ->latest('matched_at')
             ->take(30)
             ->get()
             ->map(function (Transaction $transaction) {
                 $line = $transaction->line;
-                $student = $transaction->voucher?->student;
-                $studentCode = $student?->code
-                    ?? ($transaction->voucher?->raw_payload['student_code'] ?? null);
+                $entry = $transaction->salesEntry;
+                $studentName = $entry?->student_name ?? 'Sin estudiante';
+                $studentCode = $entry?->custom_id ?? '—';
 
                 return [
                     'id' => $transaction->id,
                     'transactionId' => $line?->id,
-                    'voucherId' => $transaction->payment_voucher_id,
+                    'entryId' => $transaction->sales_book_entry_id,
                     'bankId' => optional($line?->statement?->account?->bank)->id,
-                    'student' => $student?->full_name ?? 'Sin estudiante',
-                    'student_name' => $student?->full_name ?? 'Sin estudiante',
+                    'bank_name' => $entry?->bank_name ?? optional($line?->statement?->account?->bank)->name,
+                    'student' => $studentName,
+                    'student_name' => $studentName,
                     'student_code' => $studentCode,
-                    'amount' => (float) ($line?->amount ?? $transaction->voucher?->amount ?? 0),
+                    'amount' => (float) ($line?->amount ?? $entry?->amount ?? 0),
                     'date' => optional($transaction->matched_at ?? $line?->operation_date)?->toDateString()
                         ?? now()->toDateString(),
+                    'report_date' => optional($entry?->invoice_date)?->toDateString(),
+                    'reconciliation_date' => optional($transaction->matched_at)?->toDateTimeString(),
                     'status' => strtolower($transaction->status ?? 'conciliado'),
-                    'billing_status' => $transaction->voucher?->billing_status ?? 'pendiente',
+                    'billing_status' => $entry?->state_label ?? 'pendiente',
+                    'operation_reference' => $entry?->operation_reference ?? $line?->operation_number,
+                    'invoice_number' => $entry?->invoice_number,
+                    'nit_ci' => $entry?->nit_ci,
+                    'razon_social' => $entry?->razon_social,
+                    'payment_type' => $entry?->payment_type,
+                    'account' => $entry?->account_label ?? optional($line?->statement?->account)->number,
+                    'custom_id' => $entry?->custom_id,
+                    'difference_amount' => (float) ($transaction->difference_amount ?? 0),
+                    'assigned_by' => $transaction->matchedBy?->name,
                 ];
             })
             ->values();
 
-        $latestPayments = PaymentVoucher::select('student_id', DB::raw('MAX(paid_at) as last_paid_at'))
-            ->groupBy('student_id')
-            ->pluck('last_paid_at', 'student_id');
+        $latestByCode = SalesBookEntry::select('custom_id', DB::raw('MAX(invoice_date) as last_invoice'))
+            ->whereNotNull('custom_id')
+            ->groupBy('custom_id')
+            ->pluck('last_invoice', 'custom_id');
 
-        $studentRows = $students->map(function ($student) use ($latestPayments) {
-            $lastPayment = $latestPayments->get($student->id);
+        $latestByName = SalesBookEntry::select('student_name', DB::raw('MAX(invoice_date) as last_invoice'))
+            ->whereNotNull('student_name')
+            ->groupBy('student_name')
+            ->pluck('last_invoice', 'student_name');
+
+        $studentRows = $students->map(function ($student) use ($latestByCode, $latestByName) {
+            $lastPayment = null;
+            if ($student->code && $latestByCode->has($student->code)) {
+                $lastPayment = $latestByCode->get($student->code);
+            } elseif ($student->full_name && $latestByName->has($student->full_name)) {
+                $lastPayment = $latestByName->get($student->full_name);
+            }
 
             return [
                 'id' => 'st-'.$student->id,
@@ -221,65 +279,93 @@ class MatchingDataBuilder
         return [
             'banks' => $bankList,
             'transactions' => $transactions,
-            'vouchers' => $vouchers,
+            'report_entries' => $reportEntriesData,
             'reconciliations' => $latestReconciliations,
             'students' => $studentRows,
+            'overpayments' => $overpayments,
         ];
     }
 
-    private function extractStudentName(?PaymentVoucher $voucher): ?string
+    private function resolveEntryName(?SalesBookEntry $entry): string
     {
-        if (! $voucher) {
-            return null;
+        if (! $entry) {
+            return 'Por asignar';
         }
 
-        if ($voucher->student?->full_name) {
-            return $voucher->student->full_name;
+        if ($entry->student_name) {
+            return $entry->student_name;
         }
 
-        $identifier = $voucher->student?->code
-            ?? ($voucher->raw_payload['student_code'] ?? null);
+        if ($entry->razon_social) {
+            return $entry->razon_social;
+        }
 
+        $identifier = $entry->custom_id ?? $entry->invoice_number;
         if ($identifier) {
             $student = $this->findStudentByIdentifier($identifier);
             if ($student) {
                 return $student->full_name ?? $student->code;
             }
-
-            if (str_contains($identifier, '@')) {
-                return Str::of($identifier)
-                    ->before('@')
-                    ->replace(['.', '_', '-'], ' ')
-                    ->title()
-                    ->trim()
-                    ->value() ?: $identifier;
-            }
         }
 
-        return $voucher->student?->code ?? $identifier;
+        return 'Por asignar';
     }
 
-    private function extractStudentCode(?PaymentVoucher $voucher): ?string
+    private function resolveEntryCode(?SalesBookEntry $entry): string
     {
-        if (! $voucher) {
+        if (! $entry) {
+            return '—';
+        }
+
+        if ($entry->custom_id) {
+            return $entry->custom_id;
+        }
+
+        $candidate = $entry->invoice_number ?? $entry->operation_reference;
+        if ($candidate) {
+            return (string) $candidate;
+        }
+
+        return '—';
+    }
+
+    private function normalizeOperationKey(?string $value): ?string
+    {
+        if (! $value) {
             return null;
         }
 
-        if ($voucher->student?->code) {
-            return $voucher->student->code;
+        return strtoupper(Str::of($value)->replace([' ', "\t", "\n"], '')->trim()->value());
+    }
+
+    private function resolveLineAmount(BankStatementLine $line): float
+    {
+        if ($line->credit_amount !== null || $line->debit_amount !== null) {
+            return (float) ($line->credit_amount ?? 0) - (float) ($line->debit_amount ?? 0);
         }
 
-        $identifier = $voucher->raw_payload['student_code'] ?? null;
-        if ($identifier) {
-            $student = $this->findStudentByIdentifier($identifier);
-            if ($student) {
-                return $student->code;
-            }
+        return (float) ($line->amount ?? 0);
+    }
 
-            return $identifier;
+    private function findClosestEntryMatch(Collection $entries, float $amount, ?Carbon $operationDate, float $threshold): ?SalesBookEntry
+    {
+        $candidates = $entries->filter(function (SalesBookEntry $entry) use ($amount, $threshold) {
+            return abs((float) $entry->amount - $amount) <= max($threshold, 1);
+        });
+
+        if ($candidates->isEmpty()) {
+            return null;
         }
 
-        return null;
+        if ($operationDate) {
+            $operationTimestamp = $operationDate->timestamp;
+            return $candidates->sortBy(function (SalesBookEntry $entry) use ($operationTimestamp) {
+                $entryDate = $entry->invoice_date ? strtotime($entry->invoice_date) : null;
+                return $entryDate !== null ? abs($entryDate - $operationTimestamp) : PHP_INT_MAX;
+            })->first();
+        }
+
+        return $candidates->first();
     }
 
     private function findStudentByIdentifier(?string $identifier)

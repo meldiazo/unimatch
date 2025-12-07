@@ -53,19 +53,14 @@ class DatabaseSeeder extends Seeder
         // Catálogo de bancos y cuentas base
         $banks = [
             [
-                'name' => 'Banco Nacional de Bolivia',
-                'short_code' => 'BNB',
-                'accounts' => ['96356224', '8906345455860'],
-            ],
-            [
                 'name' => 'Banco Económico',
                 'short_code' => 'BE',
                 'accounts' => ['61543334149257174', '56042479'],
             ],
             [
-                'name' => 'Banco Mercantil Santa Cruz',
-                'short_code' => 'BMSC',
-                'accounts' => ['0027419886647'],
+                'name' => 'BCP',
+                'short_code' => 'BCP',
+                'accounts' => ['960001234567', '960001234568'],
             ],
             [
                 'name' => 'Banco Bisa',
@@ -73,9 +68,14 @@ class DatabaseSeeder extends Seeder
                 'accounts' => ['735919541'],
             ],
             [
-                'name' => 'BancoSol',
-                'short_code' => 'BSOL',
-                'accounts' => ['4757225361902292'],
+                'name' => 'Banco Nacional de Bolivia',
+                'short_code' => 'BNB',
+                'accounts' => ['96356224', '8906345455860'],
+            ],
+            [
+                'name' => 'Banco Mercantil Santa Cruz',
+                'short_code' => 'BMSC',
+                'accounts' => ['0027419886647'],
             ],
             [
                 'name' => 'Banco Unión',

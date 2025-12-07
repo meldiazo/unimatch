@@ -93,7 +93,7 @@ const DEFAULT_STATE = {
       alert: null
     }
   ],
-  vouchers: [
+  reportEntries: [
     {
       id: 'vc-9001',
       studentId: 'st-001',
@@ -177,7 +177,7 @@ const DEFAULT_STATE = {
     {
       id: 'rc-1001',
       transactionId: 'tx-5001',
-      voucherId: 'vc-8801',
+      entryId: 'sr-8801',
       bankId: 'bn1',
       student: 'Rosa Medina',
       amount: 425.5,
@@ -188,7 +188,7 @@ const DEFAULT_STATE = {
     {
       id: 'rc-1002',
       transactionId: 'tx-5002',
-      voucherId: 'vc-8802',
+      entryId: 'sr-8802',
       bankId: 'bn2',
       student: 'Luis Pérez',
       amount: 612.0,
@@ -233,6 +233,20 @@ const DEFAULT_STATE = {
       lastPayment: '2024-05-26',
       status: 'conciliado'
     }
+  ],
+  overpayments: [
+    {
+      id: 'sb-001',
+      student_name: 'Andrea López',
+      balance: 150,
+      credited_at: '2024-05-28 10:00:00'
+    },
+    {
+      id: 'sb-002',
+      student_name: 'Carlos Jiménez',
+      balance: 80.5,
+      credited_at: '2024-05-27 09:15:00'
+    }
   ]
 };
 
@@ -255,12 +269,15 @@ const serverMatchingData = loadMatchingData();
 const state = {
   banks: serverMatchingData?.banks ?? DEFAULT_STATE.banks,
   transactions: serverMatchingData?.transactions ?? DEFAULT_STATE.transactions,
-  vouchers: serverMatchingData?.vouchers ?? DEFAULT_STATE.vouchers,
+  reportEntries: serverMatchingData?.report_entries ?? DEFAULT_STATE.reportEntries,
   reconciliations: serverMatchingData?.reconciliations ?? DEFAULT_STATE.reconciliations,
   students: serverMatchingData?.students ?? DEFAULT_STATE.students,
+  overpayments: serverMatchingData?.overpayments ?? DEFAULT_STATE.overpayments,
+  pendingEntryUpdates: {},
+  pendingTransactionUpdates: {},
   ui: {
     selectedTransaction: null,
-    selectedVoucher: null,
+    selectedEntry: null,
     currentUser: {
       name: '',
       role: '',
@@ -320,18 +337,18 @@ function formatStatus(status) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function extractVoucherDbId(voucher) {
-  if (!voucher) {
+function extractEntryDbId(entry) {
+  if (!entry) {
     return null;
   }
 
-  if (voucher.db_id) {
-    return String(voucher.db_id);
+  if (entry.db_id) {
+    return String(entry.db_id);
   }
 
-  if (voucher.id) {
-    const id = String(voucher.id);
-    if (id.startsWith('vc-')) {
+  if (entry.id) {
+    const id = String(entry.id);
+    if (id.startsWith('sr-')) {
       return id.slice(3);
     }
 
@@ -341,12 +358,12 @@ function extractVoucherDbId(voucher) {
   return null;
 }
 
-function updateRecentVoucherStatus(voucherDbId, status, reason = '') {
-  if (!voucherDbId) {
+function updateReportRowStatus(entryDbId, status, reason = '') {
+  if (!entryDbId) {
     return;
   }
 
-  const row = document.querySelector(`#voucher-table tr[data-voucher-id="${voucherDbId}"]`);
+  const row = document.querySelector(`#voucher-table tr[data-voucher-id="${entryDbId}"]`);
   if (!row) {
     return;
   }
@@ -369,6 +386,147 @@ function updateRecentVoucherStatus(voucherDbId, status, reason = '') {
       reasonEl.hidden = true;
     }
   }
+}
+
+function getEntryNumericId(entry) {
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.db_id) {
+    return String(entry.db_id);
+  }
+
+  if (entry.id) {
+    const raw = String(entry.id);
+    return raw.startsWith('sr-') ? raw.slice(3) : raw;
+  }
+
+  return null;
+}
+
+function resolveEntryUpdateUrl(entry) {
+  const entryId = getEntryNumericId(entry);
+  if (!entryId) {
+    return null;
+  }
+
+  if (entry?.update_url) {
+    return entry.update_url;
+  }
+
+  if (salesReportBaseUrl) {
+    return `${salesReportBaseUrl}/${entryId}`;
+  }
+
+  return null;
+}
+
+function resolveTransactionUpdateUrl(transaction) {
+  const lineId = transaction?.db_id ?? transaction?.dbId ?? transaction?.lineId ?? null;
+  if (!lineId) {
+    return null;
+  }
+
+  if (transaction?.update_url) {
+    return transaction.update_url;
+  }
+
+  if (statementBaseUrl) {
+    return `${statementBaseUrl}/${lineId}`;
+  }
+
+  return null;
+}
+
+async function persistEntryField(entry, field, value, { silent = false } = {}) {
+  const entryId = getEntryNumericId(entry);
+  if (!entryId) {
+    showToast('No se pudo identificar el registro diario.');
+    return;
+  }
+
+  state.pendingEntryUpdates[entryId] = state.pendingEntryUpdates[entryId] || {};
+  state.pendingEntryUpdates[entryId][field] = value;
+
+  const idx = state.reportEntries.findIndex((item) => getEntryNumericId(item) === entryId);
+  if (idx !== -1) {
+    state.reportEntries[idx][field] = value;
+    if (field === 'bank_name') {
+      state.reportEntries[idx].bankName = value;
+    }
+    if (field === 'custom_id') {
+      state.reportEntries[idx].enrollment = value || '—';
+    }
+    if (field === 'operation_reference') {
+      state.reportEntries[idx].operation_number = value;
+    }
+    if (field === 'recorded_date') {
+      state.reportEntries[idx].recorded_date = value;
+    }
+  }
+
+  if (!silent) {
+    showToast('Campo actualizado. Se guardará al confirmar.');
+  }
+}
+
+function attachEntryFieldListeners(container, entry) {
+  container.querySelectorAll('[data-entry-field]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const field = input.dataset.entryField;
+      const newValue = input.value;
+      persistEntryField(entry, field, newValue, { silent: true });
+    });
+    input.addEventListener('change', () => {
+      const field = input.dataset.entryField;
+      const newValue = input.value;
+      persistEntryField(entry, field, newValue);
+    });
+    input.addEventListener('click', (event) => event.stopPropagation());
+  });
+}
+
+async function persistTransactionField(transaction, field, value, { silent = false } = {}) {
+  const lineId = transaction?.db_id ?? transaction?.dbId ?? transaction?.lineId ?? null;
+  if (!lineId) {
+    showToast('No se pudo identificar la transacción del extracto.');
+    return;
+  }
+
+  state.pendingTransactionUpdates[lineId] = state.pendingTransactionUpdates[lineId] || {};
+  state.pendingTransactionUpdates[lineId][field] = value;
+
+  const txIndex = state.transactions.findIndex((item) => item.db_id === lineId || item.id === transaction.id);
+  if (txIndex !== -1) {
+    if (field === 'custom_identifier') {
+      state.transactions[txIndex].custom_id = value;
+    } else if (field === 'billing_reference_date') {
+      state.transactions[txIndex].billing_reference_date = value;
+    } else {
+      state.transactions[txIndex][field] = value;
+    }
+  }
+
+  if (!silent) {
+    showToast('Campo actualizado. Se guardará al confirmar.');
+  }
+}
+
+function attachTransactionFieldListeners(container, transaction) {
+  container.querySelectorAll('[data-transaction-field]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const field = input.dataset.transactionField;
+      const newValue = input.value;
+      persistTransactionField(transaction, field, newValue, { silent: true });
+    });
+    input.addEventListener('change', () => {
+      const field = input.dataset.transactionField;
+      const newValue = input.value;
+      persistTransactionField(transaction, field, newValue);
+    });
+    input.addEventListener('click', (event) => event.stopPropagation());
+  });
 }
 
 function buildStudentDirectory(students = []) {
@@ -398,6 +556,19 @@ function lookupStudentName(directory, identifier) {
   return directory.get(normalized) ?? null;
 }
 
+function escapeHtml(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function normalizeStudentEntities() {
   const directory = buildStudentDirectory(state.students || []);
   const assignName = (record, codeKey = 'enrollment') => {
@@ -416,7 +587,7 @@ function normalizeStudentEntities() {
   };
 
   (state.transactions || []).forEach((tx) => assignName(tx, 'enrollment'));
-  (state.vouchers || []).forEach((voucher) => assignName(voucher, 'student_code'));
+  (state.reportEntries || []).forEach((voucher) => assignName(voucher, 'student_code'));
   (state.reconciliations || []).forEach((item) => assignName(item, 'student_code'));
 }
 
@@ -433,9 +604,8 @@ function getStudentName(entity) {
 const views = document.querySelectorAll('.view');
 const navLinks = document.querySelectorAll('.nav-link[data-target]');
 const bankFilter = document.getElementById('bank-filter');
-const statusFilter = document.getElementById('status-filter');
 const transactionList = document.getElementById('transaction-list');
-const voucherList = document.getElementById('voucher-list');
+const reportList = document.getElementById('report-entry-list');
 const matchDetail = document.getElementById('match-detail');
 const toast = document.getElementById('toast');
 const modal = document.getElementById('match-modal');
@@ -453,7 +623,29 @@ const userRoleLabel = document.querySelector('.user-role');
 const userAvatar = document.getElementById('sidebar-avatar');
 const rangeButtons = document.querySelectorAll('.toggle[data-range]');
 const summaryCards = document.querySelectorAll('.summary-filter');
-const confirmMatchUrl = appWrapper?.dataset.confirmUrl || '';
+const appOrigin = window.location.origin;
+
+function resolveBaseUrl(value, fallbackPath) {
+  const safeFallback = `${appOrigin}${fallbackPath}`;
+  if (!value) {
+    return safeFallback;
+  }
+
+  try {
+    const parsed = new URL(value, appOrigin);
+    if (!parsed.pathname.startsWith(fallbackPath)) {
+      return safeFallback;
+    }
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch (error) {
+    console.warn('URL inválida para base de datos:', value, error);
+    return safeFallback;
+  }
+}
+
+const confirmMatchUrl = resolveBaseUrl(appWrapper?.dataset.confirmUrl, '/ingresos/conciliacion/confirmar');
+const salesReportBaseUrl = resolveBaseUrl(appWrapper?.dataset.salesReportUrl, '/ingresos/reporte-diario');
+const statementBaseUrl = resolveBaseUrl(appWrapper?.dataset.statementUrl, '/ingresos/extractos');
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 const diffThreshold = Number(appWrapper?.dataset.diffThreshold || 1);
 const shortageThreshold = Number(appWrapper?.dataset.shortageThreshold || diffThreshold);
@@ -489,19 +681,35 @@ function formatCurrency(value) {
   }).format(value);
 }
 
+function parseDateValue(value) {
+  if (!value) {
+    return new Date();
+  }
+
+  if (typeof value === 'string') {
+    const isoDateOnly = /^\d{4}-\d{2}-\d{2}$/;
+    if (isoDateOnly.test(value)) {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+  }
+
+  return new Date(value);
+}
+
 function formatDate(value) {
   return new Intl.DateTimeFormat('es-EC', {
     day: '2-digit',
     month: 'short',
     year: 'numeric'
-  }).format(new Date(value));
+  }).format(parseDateValue(value));
 }
 
 function formatTime(value) {
   return new Intl.DateTimeFormat('es-EC', {
     hour: '2-digit',
     minute: '2-digit'
-  }).format(new Date(value));
+  }).format(parseDateValue(value));
 }
 
 function formatClock(value, fallback = '') {
@@ -807,19 +1015,17 @@ function renderTransactionList() {
   }
 
   const selectedBank = bankFilter ? bankFilter.value : '';
-  const selectedStatus = statusFilter ? statusFilter.value : '';
   const query = ((globalSearch && globalSearch.value) || '').toLowerCase();
 
   const filtered = state.transactions.filter((tx) => {
     const studentName = getStudentName(tx).toLowerCase();
     const matchBank = !selectedBank || tx.bankId === selectedBank;
-    const matchStatus = selectedStatus ? tx.status === selectedStatus : true;
     const matchQuery = !query ||
       studentName.includes(query) ||
       (tx.enrollment || '').toLowerCase().includes(query) ||
       (tx.id || '').toLowerCase().includes(query) ||
       tx.reference.toLowerCase().includes(query);
-    return matchBank && matchStatus && matchQuery;
+    return matchBank && matchQuery;
   });
 
   transactionList.innerHTML = '';
@@ -843,115 +1049,192 @@ function renderTransactionList() {
 
     item.innerHTML = `
       <div class="list-meta">
-        <span>${bankLabel}</span>
-        <span>${timeLabel}</span>
+        <div>
+          <strong>${studentName}</strong>
+          <small>${bankLabel} · ${officeLabel}</small>
+        </div>
+        <div class="text-right">
+          <span class="badge ${getStatusBadgeClass(tx.status)}">${formatStatus(tx.status)}</span>
+          <small>${timeLabel}</small>
+        </div>
       </div>
       <strong>${formatCurrency(tx.amount)}</strong>
       <div class="list-meta">
-        <span>${studentName} · ${tx.enrollment}</span>
-        <span class="badge ${getStatusBadgeClass(tx.status)}">${formatStatus(tx.status)}</span>
-      </div>
-      <div class="list-meta">
-        <span>${tx.operation_number || '—'}</span>
-        <span>${officeLabel}</span>
+        <span>Operación: ${tx.operation_number || '—'}</span>
+        <span>Fecha: ${formatDate(tx.date)}</span>
       </div>
     `;
 
     item.addEventListener('click', () => {
       state.ui.selectedTransaction = tx.id;
-      state.ui.selectedVoucher = null;
+      state.ui.selectedEntry = null;
       renderTransactionList();
-      renderVoucherList();
+      renderEntryList();
       renderMatchDetail();
     });
-
     transactionList.appendChild(item);
   });
 }
 
-function getVoucherSuggestions(transaction) {
-  if (!transaction) return [];
+function getEntrySuggestions(transaction) {
+  const entries = [...state.reportEntries];
 
-  const candidates = state.vouchers.filter((voucher) => voucher.status !== 'conciliado');
+  return entries
+    .map((entry) => {
+      const entryAmount = Number(entry.amount) || 0;
+      const transactionAmount = transaction ? Number(transaction.amount) || 0 : 0;
+      if (!transaction) {
+        return {
+          entry,
+          score: 0,
+          amountDifference: null,
+          dateDifference: null,
+        };
+      }
 
-  return candidates
-    .map((voucher) => {
-      const amountDifference = Math.abs(voucher.amount - transaction.amount);
-      const isSameStudent = voucher.studentId === transaction.studentId;
+      const amountDifference = Math.abs(entryAmount - transactionAmount);
+      const isSameStudent = entry.studentId && transaction.studentId
+        ? entry.studentId === transaction.studentId
+        : false;
       const sameOperation =
         transaction.operation_number &&
-        voucher.operation_number &&
-        voucher.operation_number === transaction.operation_number;
+        entry.operation_number &&
+        entry.operation_number === transaction.operation_number;
+      const sameBank =
+        transaction.bankName &&
+        entry.bankName &&
+        transaction.bankName === entry.bankName;
+      const entryDateRaw = entry.issueDate || entry.recorded_date;
+      const txDateRaw = transaction.date;
+      let dateDifference = null;
+      let dateScore = 0;
+      if (entryDateRaw && txDateRaw) {
+        const entryDate = new Date(entryDateRaw);
+        const txDate = new Date(txDateRaw);
+        dateDifference = Math.abs(entryDate - txDate) / (1000 * 60 * 60 * 24);
+        if (dateDifference < 0.1) {
+          dateScore = 3;
+        } else if (dateDifference <= 1) {
+          dateScore = 2;
+        } else if (dateDifference <= 3) {
+          dateScore = 1;
+        }
+      }
+
+      let amountScore = 0;
+      if (amountDifference === 0) {
+        amountScore = 4;
+      } else if (amountDifference <= 5) {
+        amountScore = 3;
+      } else if (amountDifference <= 20) {
+        amountScore = 1;
+      } else if (amountDifference > 100) {
+        amountScore = -2;
+      } else {
+        amountScore = 0;
+      }
+
       const score =
         (isSameStudent ? 2 : 0) +
-        (amountDifference < 1 ? 2 : amountDifference < 10 ? 1 : 0) +
-        (sameOperation ? 3 : 0);
-      return { voucher, score, amountDifference };
+        amountScore +
+        dateScore +
+        (sameOperation ? 4 : 0) +
+        (sameBank ? 1 : 0);
+
+      return { entry, score, amountDifference, dateDifference };
     })
-    .sort((a, b) => b.score - a.score || a.amountDifference - b.amountDifference)
+    .sort((a, b) => {
+      if (transaction) {
+        return b.score - a.score || a.amountDifference - b.amountDifference;
+      }
+
+      const dateA = a.entry.issueDate ? new Date(a.entry.issueDate).getTime() : 0;
+      const dateB = b.entry.issueDate ? new Date(b.entry.issueDate).getTime() : 0;
+      return dateB - dateA;
+    })
     .map((item) => ({
-      ...item.voucher,
+      ...item.entry,
       rank: item.score,
       amountDifference: item.amountDifference,
+      dateDifference: item.dateDifference,
     }));
 }
 
-function renderVoucherList() {
-  if (!voucherList) {
+function renderEntryList() {
+  if (!reportList) {
     return;
   }
 
-  voucherList.innerHTML = '';
+  reportList.innerHTML = '';
   const transaction = state.transactions.find((tx) => tx.id === state.ui.selectedTransaction);
-  const voucherCountLabel = document.getElementById('voucher-count');
+  const countLabel = document.getElementById('report-count');
 
-  if (!transaction) {
-    if (voucherCountLabel) {
-      voucherCountLabel.textContent = 0;
-    }
-    voucherList.innerHTML = '<div class="empty-state" data-empty="voucher">Selecciona una transacción para ver sugerencias.</div>';
-    return;
+  const suggestions = getEntrySuggestions(transaction);
+  if (countLabel) {
+    countLabel.textContent = suggestions.length;
   }
 
-  const suggestions = getVoucherSuggestions(transaction);
-  if (voucherCountLabel) {
-    voucherCountLabel.textContent = suggestions.length;
+  if (transaction) {
+    const hasSelected = suggestions.some((entry) => entry.id === state.ui.selectedEntry);
+    if (!hasSelected && suggestions.length) {
+      state.ui.selectedEntry = suggestions[0].id;
+    }
   }
 
   if (!suggestions.length) {
-    voucherList.innerHTML = '<div class="empty-state">No hay vouchers compatibles. Revisa manualmente.</div>';
+    reportList.innerHTML = '<div class="empty-state">No hay registros cargados. Importa el reporte diario para comenzar.</div>';
     return;
   }
 
-  suggestions.forEach((voucher) => {
-    const studentName = getStudentName(voucher);
-    const voucherDate = voucher.paymentDate || voucher.issueDate;
+  const notice = document.createElement('div');
+  notice.className = 'small text-muted px-3 py-2';
+  notice.textContent = transaction
+    ? 'Ordenado por compatibilidad con el extracto seleccionado.'
+    : 'Mostrando todos los registros del reporte diario.';
+  reportList.appendChild(notice);
+
+  suggestions.forEach((entry, index) => {
+    const studentName = getStudentName(entry);
+    const invoiceDate = entry.issueDate ? formatDate(entry.issueDate) : '—';
+    const recordedDate = entry.recorded_date ? formatDate(entry.recorded_date) : 'Sin registrar';
+    const badgeSuggestion = transaction && index === 0 ? '<span class="badge suggested">Sugerido</span>' : '';
+    const statusBadge = `<span class="badge ${getStatusBadgeClass(entry.status)}">${formatStatus(entry.status)}</span>`;
     const item = document.createElement('article');
     item.className = 'list-item';
-    item.dataset.id = voucher.id;
-    if (state.ui.selectedVoucher === voucher.id) {
+    item.dataset.id = entry.id;
+    if (state.ui.selectedEntry === entry.id) {
       item.classList.add('active');
     }
 
     item.innerHTML = `
       <div class="list-meta">
-        <span>${voucher.id}</span>
-        <span>${voucherDate ? formatDate(voucherDate) : '—'}</span>
+        <div>
+          <strong>Factura ${entry.invoice_number || '—'}</strong>
+          <small>${invoiceDate}</small>
+        </div>
+        <div class="text-right">
+          ${badgeSuggestion}
+          ${statusBadge}
+        </div>
       </div>
-      <strong>${formatCurrency(voucher.amount)}</strong>
+      <strong>${formatCurrency(entry.amount)}</strong>
       <div class="list-meta">
-        <span>${studentName} · ${voucher.enrollment}</span>
-        <span class="badge suggested">Nivel ${voucher.rank}</span>
+        <span>${escapeHtml(entry.razon_social || '—')}</span>
+        <small>${studentName}</small>
+      </div>
+      <div class="list-meta small text-muted">
+        <span>Tipo: ${escapeHtml(entry.payment_type || '—')}</span>
+        <span>Cuenta: ${escapeHtml(entry.account || '—')}</span>
+        <span>Operación: ${escapeHtml(entry.operation_reference || entry.operation_number || '—')}</span>
       </div>
     `;
 
     item.addEventListener('click', () => {
-      state.ui.selectedVoucher = voucher.id;
-      renderVoucherList();
+      state.ui.selectedEntry = entry.id;
+      renderEntryList();
       renderMatchDetail();
     });
-
-    voucherList.appendChild(item);
+    reportList.appendChild(item);
   });
 }
 
@@ -962,18 +1245,17 @@ function renderMatchDetail() {
 
   matchDetail.innerHTML = '';
   const transaction = state.transactions.find((tx) => tx.id === state.ui.selectedTransaction);
-  const voucher = state.vouchers.find((vc) => vc.id === state.ui.selectedVoucher);
+  const voucher = state.reportEntries.find((vc) => vc.id === state.ui.selectedEntry);
 
   if (!transaction) {
-    matchDetail.innerHTML = '<div class="empty-state" data-empty="detail">Selecciona transacción y voucher para revisar coincidencia.</div>';
+    matchDetail.innerHTML = '<div class="empty-state" data-empty="detail">Selecciona transacción y registro para revisar coincidencia.</div>';
     return;
   }
 
   const transactionName = getStudentName(transaction);
   const voucherName = getStudentName(voucher);
-  const transactionBank = transaction.bankName || getBankName(transaction.bankId) || 'Sin banco';
-  const voucherBank = voucher ? (voucher.bankName || getBankName(voucher.bankId) || 'Sin banco') : 'Sin banco';
-  const voucherDate = voucher ? (voucher.paymentDate || voucher.issueDate) : null;
+  const txAmount = Number(transaction.amount) || 0;
+  const voucherAmount = voucher ? Number(voucher.amount) || 0 : 0;
   const debitDisplay = transaction.debit_amount !== null ? formatCurrency(transaction.debit_amount) : '—';
   const creditDisplay = transaction.credit_amount !== null ? formatCurrency(transaction.credit_amount) : '—';
   const balanceDisplay =
@@ -981,122 +1263,176 @@ function renderMatchDetail() {
   const clockDisplay = transaction.transaction_time
     ? formatClock(transaction.transaction_time)
     : formatTime(transaction.date);
+  const entryIssueDate = voucher?.issueDate ? formatDate(voucher.issueDate) : '—';
+  const entryRecordedValue = voucher?.recorded_date || '';
+  const entryOperation = voucher?.operation_reference || voucher?.operation_number || '';
+  const transactionLineId = transaction?.db_id ?? transaction?.dbId ?? transaction?.lineId ?? null;
+  const entryNumericId = getEntryNumericId(voucher);
+  const transactionUpdateUrl =
+    transaction?.update_url
+    || (transactionLineId && statementBaseUrl ? `${statementBaseUrl}/${transactionLineId}` : '');
+  const entryUpdateUrl =
+    voucher?.update_url
+    || (entryNumericId && salesReportBaseUrl ? `${salesReportBaseUrl}/${entryNumericId}` : '');
+
+  const transactionColumns = [
+    { label: 'Fecha', value: formatDate(transaction.date) },
+    { label: 'Hora', value: clockDisplay },
+    { label: 'N.º', value: transaction.operation_number || '—' },
+    { label: 'Descripción', value: transaction.reference || '—' },
+    { label: 'Débito', value: debitDisplay },
+    { label: 'Crédito', value: creditDisplay },
+    { label: 'Saldo', value: balanceDisplay },
+  ];
 
   const txCard = document.createElement('div');
   txCard.className = 'detail-card';
   txCard.innerHTML = `
     <div class="detail-header">
       <h4>Transacción ${transaction.id}</h4>
-      <span class="badge ${getStatusBadgeClass(transaction.status)}">${formatStatus(transaction.status)}</span>
     </div>
     <div class="detail-grid">
-      <div>
-        <span class="detail-label">Estudiante</span>
-        <p class="detail-value">${transactionName}</p>
-      </div>
-      <div>
-        <span class="detail-label">Código</span>
-        <p class="detail-value">${transaction.enrollment}</p>
-      </div>
-      <div>
-        <span class="detail-label">Monto</span>
-        <p class="detail-value">${formatCurrency(transaction.amount)}</p>
-      </div>
-      <div>
-        <span class="detail-label">Banco</span>
-        <p class="detail-value">${transactionBank}</p>
-      </div>
-      <div>
-        <span class="detail-label">Fecha</span>
-        <p class="detail-value">${formatDate(transaction.date)} · ${clockDisplay}</p>
-      </div>
-      <div>
-        <span class="detail-label">Oficina</span>
-        <p class="detail-value">${transaction.office || '—'}</p>
-      </div>
-      <div>
-        <span class="detail-label">Detalle</span>
-        <p class="detail-value">${transaction.reference}</p>
-      </div>
-      <div>
-        <span class="detail-label">N.º operación</span>
-        <p class="detail-value">${transaction.operation_number || '—'}</p>
-      </div>
-      <div>
-        <span class="detail-label">Débito</span>
-        <p class="detail-value">${debitDisplay}</p>
-      </div>
-      <div>
-        <span class="detail-label">Crédito</span>
-        <p class="detail-value">${creditDisplay}</p>
-      </div>
-      <div>
-        <span class="detail-label">Saldo</span>
-        <p class="detail-value">${balanceDisplay}</p>
-      </div>
+      ${transactionColumns
+        .map(
+          (col) => `
+            <div>
+              <span class="detail-label">${col.label}</span>
+              <p class="detail-value">${col.value}</p>
+            </div>
+          `
+        )
+        .join('')}
     </div>
   `;
   matchDetail.appendChild(txCard);
 
+  const txEditCard = document.createElement('div');
+  txEditCard.className = 'detail-card';
+  txEditCard.innerHTML = `
+    <div class="detail-grid editable-inputs">
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        placeholder="ID manual"
+        value="${escapeHtml(transaction.custom_id || '')}"
+        data-transaction-field="custom_identifier"
+        data-update-url="${escapeHtml(transactionUpdateUrl || '')}"
+      >
+      <input
+        type="date"
+        class="form-control form-control-sm"
+        value="${transaction.billing_reference_date || ''}"
+        min="${transaction.date ? escapeHtml(transaction.date.slice(0, 10)) : ''}"
+        data-transaction-field="billing_reference_date"
+        data-update-url="${escapeHtml(transactionUpdateUrl || '')}"
+      >
+    </div>
+  `;
+  matchDetail.appendChild(txEditCard);
+  attachTransactionFieldListeners(txEditCard, transaction);
+
   if (!voucher) {
     const info = document.createElement('div');
     info.className = 'empty-state';
-    info.textContent = 'Selecciona un voucher para comparar.';
+    info.textContent = 'Selecciona un registro para comparar.';
     matchDetail.appendChild(info);
     return;
   }
 
-  const difference = Number((transaction.amount - voucher.amount).toFixed(2));
+  const difference = Number((txAmount - voucherAmount).toFixed(2));
   const hasOverpayment = difference > 0;
   const shortage = difference < 0 && Math.abs(difference) >= shortageThreshold;
+
+  const voucherColumns = [
+    { label: 'N.º', value: voucher.entry_number || voucher.serial_number || voucher.id },
+    { label: 'Fecha', value: entryIssueDate },
+    { label: 'Número factura', value: voucher.invoice_number || '—' },
+    { label: 'NIT / CI', value: escapeHtml(voucher.nit_ci || '—') },
+    { label: 'Razón social', value: escapeHtml(voucher.razon_social || '—') },
+    { label: 'Nombre estudiante', value: voucherName },
+    { label: 'Tipo de pago', value: escapeHtml(voucher.payment_type || '—') },
+    { label: 'Monto', value: formatCurrency(voucher.amount) },
+    { label: 'Cuenta', value: escapeHtml(voucher.account || '—') },
+    { label: 'Estado', value: formatStatus(voucher.status) },
+  ];
 
   const voucherCard = document.createElement('div');
   voucherCard.className = 'detail-card';
   voucherCard.innerHTML = `
     <div class="detail-header">
-      <h4>Voucher ${voucher.id}</h4>
-      <span class="badge suggested">Sugerido</span>
+      <h4>Registro ${voucher.id}</h4>
     </div>
     <div class="detail-grid">
-      <div>
-        <span class="detail-label">Estudiante</span>
-        <p class="detail-value">${voucherName}</p>
-      </div>
-      <div>
-        <span class="detail-label">Código</span>
-        <p class="detail-value">${voucher.enrollment}</p>
-      </div>
-      <div>
-        <span class="detail-label">Monto</span>
-        <p class="detail-value">${formatCurrency(voucher.amount)}</p>
-      </div>
-      <div>
-        <span class="detail-label">Fecha de pago</span>
-        <p class="detail-value">${voucherDate ? formatDate(voucherDate) : '—'}</p>
-      </div>
-      <div>
-        <span class="detail-label">Banco</span>
-        <p class="detail-value">${voucherBank}</p>
-      </div>
-      <div>
-        <span class="detail-label">N.º operación</span>
-        <p class="detail-value">${voucher.operation_number || '—'}</p>
-      </div>
-    </div>
-    <div class="mt-3">
-      <span class="detail-label d-block">Diferencia detectada</span>
-      <p class="detail-value ${difference > 0 ? 'text-success' : difference < 0 ? 'text-danger' : ''}">
-        ${formatCurrency(difference)}
-      </p>
+      ${voucherColumns
+        .map(
+          (col) => `
+            <div>
+              <span class="detail-label">${col.label}</span>
+              <p class="detail-value">${col.value}</p>
+            </div>
+          `
+        )
+        .join('')}
     </div>
   `;
   matchDetail.appendChild(voucherCard);
+
+  const editCard = document.createElement('div');
+  editCard.className = 'detail-card';
+  editCard.innerHTML = `
+    <div class="detail-grid editable-inputs">
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        placeholder="ID manual"
+        data-entry-field="custom_id"
+        value="${escapeHtml(voucher.custom_id || '')}"
+        data-update-url="${escapeHtml(entryUpdateUrl || '')}"
+      >
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        placeholder="Banco"
+        data-entry-field="bank_name"
+        value="${escapeHtml(voucher.bank_name || voucher.bankName || '')}"
+        data-update-url="${escapeHtml(entryUpdateUrl || '')}"
+      >
+      <input
+        type="date"
+        class="form-control form-control-sm"
+        data-entry-field="recorded_date"
+        value="${escapeHtml(entryRecordedValue)}"
+        data-update-url="${escapeHtml(entryUpdateUrl || '')}"
+        ${voucher.issueDate ? `min="${escapeHtml(voucher.issueDate)}"` : ''}
+      >
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        placeholder="Operación"
+        data-entry-field="operation_reference"
+        value="${escapeHtml(entryOperation)}"
+        data-update-url="${escapeHtml(entryUpdateUrl || '')}"
+      >
+    </div>
+  `;
+  matchDetail.appendChild(editCard);
+  attachEntryFieldListeners(editCard, voucher);
+
+  const differenceCard = document.createElement('div');
+  differenceCard.className = 'detail-card';
+  differenceCard.innerHTML = `
+    <span class="detail-label d-block">Diferencia detectada</span>
+    <p class="detail-value ${difference > 0 ? 'text-success' : difference < 0 ? 'text-danger' : ''}">
+      ${formatCurrency(difference)}
+    </p>
+  `;
+  matchDetail.appendChild(differenceCard);
 
   if (shortage) {
     const warning = document.createElement('div');
     warning.className = 'alert alert-warning';
     warning.innerHTML = `
-      <strong>Atención:</strong> El voucher es menor que el monto registrado por el banco. Solicita al estudiante completar el pago o adjuntar el comprobante correcto.
+      <strong>Atención:</strong> El registro diario es menor que el monto del extracto. Solicita al estudiante completar el pago o adjuntar el comprobante correcto.
     `;
     matchDetail.appendChild(warning);
   }
@@ -1141,9 +1477,9 @@ function openModal(transaction, voucher) {
       <p><small class="text-muted">N.º operación: ${transaction.operation_number || '—'}</small></p>
     </div>
     <div>
-      <h4>Voucher</h4>
+      <h4>Registro diario</h4>
       <p><strong>${voucherName}</strong> · ${voucher.enrollment}</p>
-      <p>${formatCurrency(voucher.amount)} · ${formatDate(voucher.paymentDate || voucher.issueDate)}</p>
+      <p>${formatCurrency(voucher.amount)} · ${formatDate(voucher.issueDate || voucher.recorded_date || transaction.date)}</p>
       <p><small class="text-muted">N.º operación: ${voucher.operation_number || '—'}</small></p>
     </div>
   `;
@@ -1193,7 +1529,7 @@ function confirmMatch() {
 }
 
 function rejectMatch() {
-  const reason = prompt('Motivo del rechazo', 'Datos del voucher no coinciden con el extracto.');
+  const reason = prompt('Motivo del rechazo', 'Los datos del registro no coinciden con el extracto.');
   if (reason === null) {
     return;
   }
@@ -1202,7 +1538,12 @@ function rejectMatch() {
 }
 
 function creditMatch(defaultAmount) {
-  const creditAmount = Number(defaultAmount);
+  const parsedAmount = Number(defaultAmount);
+  const normalizedAmount = Number.isFinite(parsedAmount) ? Math.abs(parsedAmount) : NaN;
+  const creditAmount = Number.isFinite(normalizedAmount)
+    ? Number(normalizedAmount.toFixed(2))
+    : NaN;
+
   if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
     showToast('No existe excedente para acreditar.');
     return;
@@ -1218,10 +1559,10 @@ function creditMatch(defaultAmount) {
 
 async function submitMatchAction(action, extraPayload = {}) {
   const transaction = state.transactions.find((tx) => tx.id === state.ui.selectedTransaction);
-  const voucher = state.vouchers.find((vc) => vc.id === state.ui.selectedVoucher);
+  const voucher = state.reportEntries.find((vc) => vc.id === state.ui.selectedEntry);
 
   if (!transaction || !voucher) {
-    showToast('Selecciona una transacción y un voucher.');
+    showToast('Selecciona una transacción y un registro.');
     return;
   }
 
@@ -1230,12 +1571,46 @@ async function submitMatchAction(action, extraPayload = {}) {
     return;
   }
 
+  const transactionDbId = transaction.db_id ?? transaction.dbId ?? transaction.lineId ?? null;
+  const entryNumericId = getEntryNumericId(voucher);
+  const pendingLineUpdates = transactionDbId ? state.pendingTransactionUpdates[transactionDbId] : null;
+  const pendingEntryUpdates = entryNumericId ? state.pendingEntryUpdates[entryNumericId] : null;
+
+  const requiresManualIds = action === 'confirm' || action === 'credit' || action === 'reject';
+  if (requiresManualIds) {
+    const normalizeId = (value) => (value ?? '').toString().trim();
+    const hasTransactionId = normalizeId(
+      transaction.custom_id
+        || transaction.custom_identifier
+        || pendingLineUpdates?.custom_identifier
+    ) !== '';
+    const hasEntryId = normalizeId(
+      voucher.custom_id
+        || pendingEntryUpdates?.custom_id
+    ) !== '';
+    if (!hasTransactionId || !hasEntryId) {
+      showToast('Asigna el ID manual en el extracto y en el reporte diario antes de conciliar.');
+      return;
+    }
+  }
+
+  const lineUpdates = pendingLineUpdates;
+  const entryUpdates = pendingEntryUpdates;
+
   const payload = {
     action,
     bank_statement_line_id: transaction.db_id ?? transaction.dbId ?? transaction.lineId ?? transaction.id,
-    payment_voucher_id: voucher.db_id ?? voucher.dbId ?? voucher.id,
+    sales_book_entry_id: voucher.db_id ?? voucher.dbId ?? voucher.id,
     ...extraPayload,
   };
+
+  if (lineUpdates && Object.keys(lineUpdates).length) {
+    payload.line_updates = lineUpdates;
+  }
+
+  if (entryUpdates && Object.keys(entryUpdates).length) {
+    payload.entry_updates = entryUpdates;
+  }
 
   try {
     const response = await fetch(confirmMatchUrl, {
@@ -1255,7 +1630,7 @@ async function submitMatchAction(action, extraPayload = {}) {
       return;
     }
 
-    applyMatchResult(data);
+    applyMatchResult(data, transactionDbId, entryNumericId);
     closeModal();
   } catch (error) {
     console.error(error);
@@ -1263,54 +1638,26 @@ async function submitMatchAction(action, extraPayload = {}) {
   }
 }
 
-function applyMatchResult(data) {
+function applyMatchResult(data, transactionDbId = null, entryNumericId = null) {
   const action = data.action || 'confirm';
 
   if (action === 'reject') {
-    if (data.transaction) {
-      const txIndex = state.transactions.findIndex(
-        (tx) => tx.db_id === data.transaction.db_id || tx.id === data.transaction.id
-      );
-      if (txIndex !== -1) {
-        state.transactions[txIndex] = {
-          ...state.transactions[txIndex],
-          status: 'pending',
-          alert: data.message || 'Rechazado manualmente.',
-        };
-      }
-    }
-
-    if (data.voucher) {
-      state.vouchers = state.vouchers.filter(
-        (voucher) => voucher.db_id !== data.voucher.db_id && voucher.id !== data.voucher.id
-      );
-
-      updateRecentVoucherStatus(
-        extractVoucherDbId(data.voucher),
-        'rechazado',
-        data.voucher?.reason || 'Rechazado en conciliación'
-      );
-    }
-  } else {
     if (data.transaction) {
       state.transactions = state.transactions.filter(
         (tx) => tx.db_id !== data.transaction.db_id && tx.id !== data.transaction.id
       );
     }
 
-    if (data.voucher) {
-      state.vouchers = state.vouchers.filter(
-        (voucher) => voucher.db_id !== data.voucher.db_id && voucher.id !== data.voucher.id
+    if (data.report_entry) {
+      state.reportEntries = state.reportEntries.filter(
+        (entry) => entry.db_id !== data.report_entry.db_id && entry.id !== data.report_entry.id
       );
 
-      const newStatus = action === 'credit' ? 'demasia' : 'conciliado';
-      const reason =
-        action === 'credit'
-          ? data.voucher?.reason || 'Pago en demasía'
-          : action === 'reject'
-            ? (data.voucher?.reason || '')
-            : '';
-      updateRecentVoucherStatus(extractVoucherDbId(data.voucher), newStatus, reason);
+      updateReportRowStatus(
+        extractEntryDbId(data.report_entry),
+        'rechazado',
+        data.report_entry?.reason || 'Rechazado en conciliación'
+      );
     }
 
     if (data.reconciliation) {
@@ -1325,16 +1672,61 @@ function applyMatchResult(data) {
       }
       state.reconciliations.unshift(reconciliation);
     }
+  } else {
+    if (data.transaction) {
+      state.transactions = state.transactions.filter(
+        (tx) => tx.db_id !== data.transaction.db_id && tx.id !== data.transaction.id
+      );
+    }
+
+    if (data.report_entry) {
+      state.reportEntries = state.reportEntries.filter(
+        (entry) => entry.db_id !== data.report_entry.db_id && entry.id !== data.report_entry.id
+      );
+
+      const newStatus = action === 'credit' ? 'demasia' : 'conciliado';
+      const reason = action === 'credit'
+        ? data.report_entry?.reason || 'Pago en demasía'
+        : action === 'reject'
+          ? (data.report_entry?.reason || '')
+          : '';
+
+      updateReportRowStatus(extractEntryDbId(data.report_entry), newStatus, reason);
+    }
+
+    if (data.reconciliation) {
+      const reconciliation = {
+        ...data.reconciliation,
+      };
+      if (!reconciliation.student_name && reconciliation.student) {
+        reconciliation.student_name = reconciliation.student;
+      }
+      if (reconciliation.status) {
+        reconciliation.status = reconciliation.status.toLowerCase();
+      }
+      state.reconciliations.unshift(reconciliation);
+    }
+
+    if (action === 'credit' && data.overpayment) {
+      const overpayment = normalizeOverpayment(data.overpayment, data.report_entry);
+      upsertOverpayment(overpayment);
+    }
   }
 
   state.ui.selectedTransaction = null;
-  state.ui.selectedVoucher = null;
+  state.ui.selectedEntry = null;
+  if (transactionDbId) {
+    delete state.pendingTransactionUpdates[transactionDbId];
+  }
+  if (entryNumericId) {
+    delete state.pendingEntryUpdates[entryNumericId];
+  }
 
   renderTransactionList();
-  renderVoucherList();
+  renderEntryList();
   renderMatchDetail();
   renderReconciliations();
-  renderStudents();
+  renderOverpayments();
   renderTrendChart(currentTrendRange);
   updateDashboard();
 
@@ -1356,8 +1748,8 @@ function renderReconciliations() {
     let billingCell = `<span class="badge ${billingClass}">${formatStatus(billingStatus)}</span>`;
 
     row.innerHTML = `
-      <td>${formatDate(item.date)}</td>
-      <td>${getBankName(item.bankId)}</td>
+      <td>${formatDate(item.report_date || item.date)}</td>
+      <td>${escapeHtml(item.bank_name || getBankName(item.bankId))}</td>
       <td>${studentName}</td>
       <td>${formatCurrency(item.amount)}</td>
       <td>${billingCell}</td>
@@ -1367,31 +1759,73 @@ function renderReconciliations() {
   });
 }
 
-function renderStudents() {
+function renderOverpayments() {
   if (!studentTable) {
     return;
   }
 
-  studentTable.innerHTML = '';
-  const query = (document.getElementById('student-search').value || '').toLowerCase();
+  const searchInput = document.getElementById('student-search');
+  const query = (searchInput?.value || '').toLowerCase();
+  const balances = (state.overpayments || []).filter((item) => {
+    if (!query) {
+      return true;
+    }
 
-  state.students
-    .filter((student) => {
-      if (!query) {
-        return true;
-      }
-      return student.name.toLowerCase().includes(query) ||
-        (student.enrollment || '').toLowerCase().includes(query);
-    })
-    .forEach((student) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${student.name}</td>
-        <td>${student.enrollment}</td>
-        <td>${formatDate(student.lastPayment)}</td>
-      `;
-      studentTable.appendChild(row);
-    });
+    return (item.student_name || '').toLowerCase().includes(query);
+  });
+
+  studentTable.innerHTML = '';
+
+  if (!balances.length) {
+    const row = document.createElement('tr');
+    row.innerHTML = '<td colspan="3" class="text-center text-muted py-3">No hay saldos acreditados.</td>';
+    studentTable.appendChild(row);
+    return;
+  }
+
+  balances.forEach((item) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${escapeHtml(item.student_name || '—')}</td>
+      <td>${formatCurrency(item.balance || 0)}</td>
+      <td>${item.credited_at ? formatDate(item.credited_at) : '—'}</td>
+    `;
+    studentTable.appendChild(row);
+  });
+}
+function normalizeOverpayment(raw, reportEntry = null) {
+  const entryStudent = reportEntry?.student || reportEntry?.student_name;
+  return {
+    id: raw.id || `sb-${raw.db_id || Date.now()}`,
+    db_id: raw.db_id || null,
+    student_name: raw.student_name || entryStudent || 'Sin estudiante',
+    student_code: raw.student_code || reportEntry?.custom_id || '—',
+    balance: Number(raw.balance ?? raw.credit_amount ?? 0),
+    credited_at: raw.credited_at || new Date().toISOString(),
+  };
+}
+
+function upsertOverpayment(overpayment) {
+  if (!Array.isArray(state.overpayments)) {
+    state.overpayments = [];
+  }
+
+  const matcher = (item) => {
+    if (item.db_id && overpayment.db_id) {
+      return String(item.db_id) === String(overpayment.db_id);
+    }
+    return item.id === overpayment.id;
+  };
+
+  const existingIndex = state.overpayments.findIndex(matcher);
+  if (existingIndex >= 0) {
+    state.overpayments[existingIndex] = {
+      ...state.overpayments[existingIndex],
+      ...overpayment,
+    };
+  } else {
+    state.overpayments.unshift(overpayment);
+  }
 }
 
 function renderBanks() {
@@ -1447,12 +1881,6 @@ function initFilters() {
       renderTransactionList();
     });
   }
-  if (statusFilter) {
-    statusFilter.addEventListener('change', () => {
-      clearSummaryFilterState();
-      renderTransactionList();
-    });
-  }
   if (globalSearch) {
     globalSearch.addEventListener('input', renderTransactionList);
     if (globalSearch.form) {
@@ -1461,7 +1889,7 @@ function initFilters() {
   }
   const studentSearch = document.getElementById('student-search');
   if (studentSearch) {
-    studentSearch.addEventListener('input', renderStudents);
+    studentSearch.addEventListener('input', renderOverpayments);
   }
 }
 
@@ -1549,12 +1977,8 @@ function initSummaryFilters() {
         switchView(targetView);
       }
 
-      if (targetView === 'matching' && statusFilter) {
-        statusFilter.value = status;
-        renderTransactionList();
-      }
-
       if (targetView === 'matching') {
+        renderTransactionList();
         const matchingSection = document.querySelector('[data-view="matching"]');
         if (matchingSection) {
           matchingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1586,10 +2010,10 @@ function init() {
   updateDashboard();
   renderAlerts();
   renderTransactionList();
-  renderVoucherList();
+  renderEntryList();
   renderMatchDetail();
   renderReconciliations();
-  renderStudents();
+  renderOverpayments();
   renderBanks();
   initNavigation();
   initFilters();

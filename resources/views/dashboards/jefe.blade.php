@@ -1,13 +1,12 @@
 @extends('layouts.ingresos')
 
 @php
-  $availableViews = ['dashboard', 'facturacion', 'students'];
+  $availableViews = ['dashboard', 'students'];
   $requestedView = request()->query('view');
   $activeView = in_array($requestedView, $availableViews, true) ? $requestedView : 'dashboard';
   $totals = $dashboard['totals'];
   $alerts = $dashboard['alerts'];
   $bankSummaries = $dashboard['bankSummaries'];
-  $facturacion = $dashboard['facturacion'];
   $students = $dashboard['students'];
 @endphp
 
@@ -128,7 +127,7 @@
           <div class="card-header border-0 d-flex justify-content-between align-items-center">
             <div>
               <h3 class="card-title mb-0"><i class="fas fa-university mr-2"></i>Saldos por banco</h3>
-              <p class="card-subtitle text-muted mb-0">Comparativo de montos facturados vs. recibidos.</p>
+              <p class="card-subtitle text-muted mb-0">Saldo consolidado según el último extracto disponible.</p>
             </div>
           </div>
           <div class="card-body p-0 table-responsive">
@@ -136,80 +135,18 @@
               <thead class="thead-light">
                 <tr>
                   <th>Banco</th>
-                  <th class="text-right">Total recibido</th>
-                  <th class="text-right">Facturado</th>
+                  <th class="text-right">Saldo actual</th>
                 </tr>
               </thead>
               <tbody>
                 @forelse ($bankSummaries as $bank)
                   <tr>
                     <td>{{ $bank['bank'] }} <small class="text-muted">({{ $bank['short_code'] }})</small></td>
-                    <td class="text-right">Bs {{ number_format($bank['total'], 2, ',', '.') }}</td>
-                    <td class="text-right">Bs {{ number_format($bank['facturado'], 2, ',', '.') }}</td>
+                    <td class="text-right">Bs {{ number_format($bank['balance'], 2, ',', '.') }}</td>
                   </tr>
                 @empty
                   <tr>
                     <td colspan="3" class="text-center text-muted py-4">Aún no hay saldos registrados.</td>
-                  </tr>
-                @endforelse
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-  </section>
-
-  <section class="content jef-view {{ $activeView === 'facturacion' ? '' : 'd-none' }}">
-    <div class="content-header">
-      <div class="container-fluid">
-        <div class="row mb-2 align-items-center">
-          <div class="col-sm-6">
-            <h1 class="m-0">Facturación</h1>
-            <small class="text-muted">Conciliaciones recientes y su estado de factura.</small>
-          </div>
-        </div>
-      </div>
-    </div>
-    <section class="content">
-      <div class="container-fluid">
-        <div class="card card-outline card-brand">
-          <div class="card-header border-0 d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0"><i class="fas fa-file-invoice-dollar mr-2"></i>Operaciones conciliadas</h3>
-            <span class="badge badge-info">{{ $facturacion->count() }} registros</span>
-          </div>
-          <div class="card-body p-0 table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="thead-light">
-                <tr>
-                  <th>Fecha</th>
-                  <th>Estudiante</th>
-                  <th>Banco</th>
-                  <th class="text-right">Monto</th>
-                  <th>Estado</th>
-                  <th>Facturación</th>
-                </tr>
-              </thead>
-              <tbody>
-                @forelse ($facturacion as $voucher)
-                  @php
-                    $statusClass = [
-                      'conciliado' => 'success',
-                      'demasia' => 'warning',
-                    ][strtolower($voucher->status)] ?? 'secondary';
-                    $billingClass = $voucher->billing_status === 'facturado' ? 'success' : 'warning';
-                  @endphp
-                  <tr>
-                    <td>{{ optional($voucher->paid_at)->format('d/m/Y') ?? '—' }}</td>
-                    <td>{{ $voucher->student->full_name ?? '—' }}</td>
-                    <td>{{ $voucher->bank->name ?? '—' }}</td>
-                    <td class="text-right">Bs {{ number_format($voucher->amount, 2, ',', '.') }}</td>
-                    <td><span class="badge badge-{{ $statusClass }}">{{ ucfirst($voucher->status) }}</span></td>
-                    <td><span class="badge badge-{{ $billingClass }}">{{ ucfirst($voucher->billing_status ?? 'pendiente') }}</span></td>
-                  </tr>
-                @empty
-                  <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No hay registros disponibles.</td>
                   </tr>
                 @endforelse
               </tbody>
@@ -226,7 +163,7 @@
         <div class="row mb-2 align-items-center">
           <div class="col-sm-6">
             <h1 class="m-0">Seguimiento de estudiantes</h1>
-            <small class="text-muted">Consulta últimos pagos y saldos a favor.</small>
+            <small class="text-muted">Saldos acreditados por pagos en demasía.</small>
           </div>
         </div>
       </div>
@@ -235,30 +172,28 @@
       <div class="container-fluid">
         <div class="card card-outline card-brand">
           <div class="card-header border-0 d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0"><i class="fas fa-user-graduate mr-2"></i>Histórico</h3>
-            <span class="badge badge-info">{{ $students->count() }} registros</span>
+            <h3 class="card-title mb-0"><i class="fas fa-user-graduate mr-2"></i>Saldos acreditados</h3>
+            <span class="badge badge-info">{{ collect($students)->count() }} registros</span>
           </div>
           <div class="card-body p-0 table-responsive">
             <table class="table table-hover mb-0">
               <thead class="thead-light">
                 <tr>
                   <th>Estudiante</th>
-                  <th>Código</th>
-                  <th>Último pago</th>
-                  <th class="text-right">Saldo a favor</th>
+                  <th class="text-right">Saldo</th>
+                  <th>Fecha de acreditación</th>
                 </tr>
               </thead>
               <tbody>
                 @forelse ($students as $student)
                   <tr>
                     <td>{{ $student['name'] }}</td>
-                    <td><code>{{ $student['code'] ?? '—' }}</code></td>
-                    <td>{{ $student['last_payment'] ?? '—' }}</td>
                     <td class="text-right">Bs {{ number_format($student['balance'], 2, ',', '.') }}</td>
+                    <td>{{ $student['credited_at'] ?? '—' }}</td>
                   </tr>
                 @empty
                   <tr>
-                    <td colspan="4" class="text-center text-muted py-4">Sin registros.</td>
+                    <td colspan="3" class="text-center text-muted py-4">Sin registros.</td>
                   </tr>
                 @endforelse
               </tbody>

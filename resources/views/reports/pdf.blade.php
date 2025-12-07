@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Pagos</title>
+    <title>Reporte diario de ingresos</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
@@ -12,7 +12,7 @@
     </style>
 </head>
 <body>
-    <h3>Reporte de Pagos y Facturación</h3>
+    <h3>Reporte diario de ingresos</h3>
     <p>Generado: {{ $generatedAt->format('d/m/Y H:i') }}</p>
     <table>
         <thead>
@@ -30,6 +30,7 @@
             <th>ID</th>
             <th>Banco</th>
             <th>Fecha registro</th>
+            <th>N° operación</th>
         </tr>
         </thead>
         <tbody>
@@ -48,6 +49,7 @@
                 <td>{{ $row['custom_id'] ?? '—' }}</td>
                 <td>{{ $row['banco'] ?? '—' }}</td>
                 <td>{{ $row['fecha_registro'] ?? '—' }}</td>
+                <td>{{ $row['operation_reference'] ?? '—' }}</td>
             </tr>
         @endforeach
         </tbody>

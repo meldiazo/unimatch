@@ -12,6 +12,7 @@ class Transaction extends Model
     protected $fillable = [
         'bank_statement_line_id',
         'payment_voucher_id',
+        'sales_book_entry_id',
         'status',
         'notes',
         'matched_by',
@@ -33,6 +34,11 @@ class Transaction extends Model
     public function voucher()
     {
         return $this->belongsTo(PaymentVoucher::class, 'payment_voucher_id');
+    }
+
+    public function salesEntry()
+    {
+        return $this->belongsTo(SalesBookEntry::class, 'sales_book_entry_id');
     }
 
     public function invoice()
