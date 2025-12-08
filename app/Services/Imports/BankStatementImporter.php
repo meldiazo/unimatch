@@ -34,14 +34,14 @@ class BankStatementImporter
         ?string $statementDate
     ): array {
         $disk = $this->filesystem->disk('local');
-        if (! $disk->exists('imports')) {
+        if (!$disk->exists('imports')) {
             $disk->makeDirectory('imports');
         }
 
         $extension = $uploadedFile->getClientOriginalExtension() ?: 'csv';
-        $filename = Str::uuid().'.'.$extension;
+        $filename = Str::uuid() . '.' . $extension;
         $disk->putFileAs('imports', $uploadedFile, $filename);
-        $storedPath = 'imports/'.$filename;
+        $storedPath = 'imports/' . $filename;
 
         $rows = $this->parseRowsForBank($bank, $disk->path($storedPath));
 
@@ -52,31 +52,23 @@ class BankStatementImporter
         $account = $this->resolveAccountForImport($bank, $rows);
 
         $incomingOperationsForQuery = collect($rows)
-            ->map(fn ($row) => trim((string) ($row['operation_number'] ?? '')))
+            ->map(fn($row) => trim((string) ($row['operation_number'] ?? '')))
             ->filter()
             ->unique()
             ->values();
 
         $existingOperations = BankStatementLine::whereHas('statement', function ($query) use ($account) {
-                $query->where('bank_account_id', $account->id);
-            })
+            $query->where('bank_account_id', $account->id);
+        })
             ->whereIn('operation_number', $incomingOperationsForQuery)
             ->pluck('operation_number')
-            ->map(fn ($op) => $this->normalizeOperationKey($op))
+            ->map(fn($op) => $this->normalizeOperationKey($op))
             ->filter()
             ->all();
 
         $existingOperationMap = array_flip($existingOperations);
 
-        return DB::transaction(function () use (
-            $bank,
-            $account,
-            $user,
-            $statementDate,
-            $uploadedFile,
-            $rows,
-            $existingOperationMap
-        ) {
+        return DB::transaction(function () use ($bank, $account, $user, $statementDate, $uploadedFile, $rows, $existingOperationMap) {
             $batch = ImportBatch::create([
                 'import_type' => 'extractos',
                 'source_name' => $uploadedFile->getClientOriginalName(),
@@ -179,7 +171,7 @@ class BankStatementImporter
             ]);
 
             return [
-                'message' => "Extracto importado: {$inserted} líneas registradas.".($skipped ? " {$skipped} duplicados omitidos." : ''),
+                'message' => "Extracto importado: {$inserted} líneas registradas." . ($skipped ? " {$skipped} duplicados omitidos." : ''),
                 'summary' => [
                     'lines' => $inserted,
                     'statement_id' => $statement->id,
@@ -191,6 +183,11 @@ class BankStatementImporter
 
     private function parseRowsForBank(Bank $bank, string $path): array
     {
+        // If the bank has a custom format configuration, use it.
+        if (!empty($bank->format_config['columns'])) {
+            return $this->normalizeRows($bank, $this->parseGenericFile($path));
+        }
+
         $shortCode = strtoupper($bank->short_code);
 
         return match ($shortCode) {
@@ -200,14 +197,27 @@ class BankStatementImporter
             'BISA' => $this->parseBisaSheet($path),
             'BMSC' => $this->parseMercantilSheet($path),
             'BNI' => $this->parseUnionSheet($path),
-            default => $this->normalizeCsvRows($bank, $this->parseCsv($path)),
+            default => $this->normalizeRows($bank, $this->parseCsv($path)),
         };
+    }
+
+    private function parseGenericFile(string $path): array
+    {
+        // Try parsing as Excel first
+        $rows = $this->parseExcelRows($path);
+
+        // If empty, try parsing as CSV/Text
+        if (empty($rows)) {
+            $rows = $this->parseCsv($path);
+        }
+
+        return $rows;
     }
 
     private function parseCsv(string $fullPath): array
     {
         $handle = fopen($fullPath, 'r');
-        if (! $handle) {
+        if (!$handle) {
             return [];
         }
 
@@ -225,7 +235,7 @@ class BankStatementImporter
                 continue;
             }
 
-            if (! $headers) {
+            if (!$headers) {
                 continue;
             }
 
@@ -241,7 +251,7 @@ class BankStatementImporter
         return $rows;
     }
 
-    private function normalizeCsvRows(Bank $bank, array $rows): array
+    private function normalizeRows(Bank $bank, array $rows): array
     {
         if (empty($rows)) {
             return [];
@@ -259,7 +269,7 @@ class BankStatementImporter
             'credit_amount' => 'credit_amount',
         ], Arr::get($bank->format_config, 'columns', []));
 
-        if (! array_key_exists('description', $mapping) && array_key_exists('reference', $mapping)) {
+        if (!array_key_exists('description', $mapping) && array_key_exists('reference', $mapping)) {
             $mapping['description'] = $mapping['reference'];
         }
 
@@ -278,12 +288,12 @@ class BankStatementImporter
                     'cargos',
                 ]),
                 'credit_amount' => $this->valueFromRow($row, [
-                    $mapping['credit_amount'] ?? null,
-                    'credit',
-                    'credito',
-                    'creditos',
-                    'abonos',
-                ]),
+                            $mapping['credit_amount'] ?? null,
+                            'credit',
+                            'credito',
+                            'creditos',
+                            'abonos',
+                        ]),
                 'running_balance' => $this->valueFromRow($row, [
                     $mapping['running_balance'] ?? null,
                     'running_balance',
@@ -303,7 +313,7 @@ class BankStatementImporter
                 continue;
             }
 
-            if (! array_key_exists($candidate, $row)) {
+            if (!array_key_exists($candidate, $row)) {
                 continue;
             }
 
@@ -369,7 +379,7 @@ class BankStatementImporter
 
         $normalized = [];
         foreach ($rows as $row) {
-            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+            if (count(array_filter($row, fn($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
 
@@ -456,14 +466,14 @@ class BankStatementImporter
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         if ($extension === 'xlsx' || $this->isXlsx($path)) {
             $rows = SimpleXlsxReader::extractRows($path);
-            if (! empty($rows)) {
+            if (!empty($rows)) {
                 return $rows;
             }
         }
 
         if ($extension === 'xls' || $this->isBinaryXls($path)) {
             $rows = BinaryXlsReader::extractRows($path);
-            if (! empty($rows)) {
+            if (!empty($rows)) {
                 return $rows;
             }
         }
@@ -484,7 +494,7 @@ class BankStatementImporter
     private function isBinaryXls(string $path): bool
     {
         $handle = @fopen($path, 'rb');
-        if (! $handle) {
+        if (!$handle) {
             return false;
         }
 
@@ -497,7 +507,7 @@ class BankStatementImporter
     private function isXlsx(string $path): bool
     {
         $handle = @fopen($path, 'rb');
-        if (! $handle) {
+        if (!$handle) {
             return false;
         }
 
@@ -573,7 +583,7 @@ class BankStatementImporter
         $normalizedRows = [];
         for ($i = $headerIndex + 1; $i < count($rows); $i++) {
             $row = $rows[$i];
-            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+            if (count(array_filter($row, fn($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
 
@@ -622,7 +632,7 @@ class BankStatementImporter
 
         $normalized = [];
         foreach ($rows as $row) {
-            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+            if (count(array_filter($row, fn($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
 
@@ -685,12 +695,12 @@ class BankStatementImporter
                 $description = trim(implode(' · ', array_filter([
                     $mapped['glosa'] ?? null,
                     $mapped['tipo'] ?? null,
-                ], fn ($part) => trim((string) $part) !== '')));
+                ], fn($part) => trim((string) $part) !== '')));
 
                 $referenceParts = array_filter([
                     $mapped['sucursal'] ?? null,
                     $mapped['usuario'] ?? null,
-                ], fn ($part) => trim((string) $part) !== '');
+                ], fn($part) => trim((string) $part) !== '');
 
                 return [
                     'operation_number' => $operationNumber,
@@ -748,14 +758,14 @@ class BankStatementImporter
                 }
 
                 $description = trim((string) ($mapped['description'] ?? ''));
-                if (! empty($mapped['complement'])) {
-                    $description = trim($description.' · '.$mapped['complement']);
+                if (!empty($mapped['complement'])) {
+                    $description = trim($description . ' · ' . $mapped['complement']);
                 }
 
                 $referenceParts = array_filter([
                     $mapped['sucursal'] ?? null,
                     $mapped['canal'] ?? null,
-                ], fn ($part) => trim((string) $part) !== '');
+                ], fn($part) => trim((string) $part) !== '');
 
                 return [
                     'operation_number' => $operationNumber,
@@ -813,7 +823,7 @@ class BankStatementImporter
 
         $normalized = [];
         foreach ($rows as $row) {
-            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+            if (count(array_filter($row, fn($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
 
@@ -826,13 +836,13 @@ class BankStatementImporter
                 $row[$positions['description']] ?? null,
                 $row[$positions['glosa']] ?? null,
                 $row[$positions['tipo']] ?? null,
-            ], fn ($part) => trim((string) $part) !== '');
+            ], fn($part) => trim((string) $part) !== '');
 
             $referenceParts = array_filter([
                 $row[$positions['depositante']] ?? null,
                 $row[$positions['destinatario']] ?? null,
                 $row[$positions['office']] ?? null,
-            ], fn ($part) => trim((string) $part) !== '');
+            ], fn($part) => trim((string) $part) !== '');
 
             $normalized[] = [
                 'operation_number' => $operationNumber,
@@ -963,7 +973,7 @@ class BankStatementImporter
         }
 
         $value = $this->parseTabValue($value);
-        if (! $value) {
+        if (!$value) {
             return null;
         }
 
@@ -993,7 +1003,7 @@ class BankStatementImporter
     private function parseTimeValue(?string $value): ?string
     {
         $value = $this->parseTabValue($value);
-        if (! $value) {
+        if (!$value) {
             return null;
         }
 
@@ -1002,7 +1012,7 @@ class BankStatementImporter
         } catch (\Throwable) {
             $parts = explode(':', $value);
             if (count($parts) >= 2) {
-                $parts = array_map(fn ($segment) => str_pad(preg_replace('/\D/', '', $segment), 2, '0', STR_PAD_LEFT), $parts);
+                $parts = array_map(fn($segment) => str_pad(preg_replace('/\D/', '', $segment), 2, '0', STR_PAD_LEFT), $parts);
                 return implode(':', array_slice($parts, 0, 3));
             }
 
@@ -1079,7 +1089,7 @@ class BankStatementImporter
         }
 
         $headers = null;
-        while (! empty($rawRows)) {
+        while (!empty($rawRows)) {
             $candidate = array_map([$this, 'normalizeHeader'], $rawRows[0]);
             $hasFecha = in_array('fecha', $candidate, true);
             $hasOperation = in_array('codigo_de_transaccion', $candidate, true) || in_array('codigo', $candidate, true);
@@ -1099,7 +1109,7 @@ class BankStatementImporter
 
         $normalizedRows = [];
         foreach ($rawRows as $row) {
-            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+            if (count(array_filter($row, fn($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
 
@@ -1145,7 +1155,7 @@ class BankStatementImporter
 
         foreach ($rows as $row) {
             foreach ($candidates as $candidate) {
-                if (! empty($row[$candidate])) {
+                if (!empty($row[$candidate])) {
                     $value = trim((string) $row[$candidate]);
                     if ($value !== '') {
                         $accountNumber = preg_replace('/[^0-9]/', '', $value) ?: $value;
@@ -1153,7 +1163,7 @@ class BankStatementImporter
                     }
                 }
 
-                if (! empty($row['raw_payload'][$candidate] ?? null)) {
+                if (!empty($row['raw_payload'][$candidate] ?? null)) {
                     $value = trim((string) $row['raw_payload'][$candidate]);
                     if ($value !== '') {
                         $accountNumber = preg_replace('/[^0-9]/', '', $value) ?: $value;
@@ -1171,7 +1181,7 @@ class BankStatementImporter
         }
 
         $account = $bank->accounts()->first();
-        if (! $account) {
+        if (!$account) {
             throw new \InvalidArgumentException("Configura una cuenta bancaria para {$bank->name} antes de importar.");
         }
 

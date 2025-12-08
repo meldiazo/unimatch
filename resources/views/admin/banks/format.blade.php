@@ -1,6 +1,6 @@
 @extends('layouts.ingresos')
 
-@section('title', 'Formato bancario · '.$bank->name)
+@section('title', 'Formato bancario · ' . $bank->name)
 
 @section('panel-content')
   <section class="content-header">
@@ -42,6 +42,10 @@
             Completa el nombre exacto de cada columna según aparece en el archivo que entrega el banco.
             Si el campo no existe, déjalo vacío. Estos valores se usarán para mapear automáticamente cada carga.
           </p>
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> <strong>Nota:</strong> Si configuras este formato, el sistema usará esta
+            configuración en lugar del formato predeterminado del banco. Esto aplica tanto para archivos Excel como CSV.
+          </div>
           <form method="POST" action="{{ route('admin.banks.format.update', $bank) }}">
             @csrf
             @method('PUT')
@@ -60,15 +64,11 @@
                     <tr>
                       <td><code>{{ $key }}</code></td>
                       <td style="width: 320px;">
-                        <input
-                          type="text"
-                          name="columns[{{ $key }}]"
-                          class="form-control form-control-sm @error('columns.'.$key) is-invalid @enderror"
-                          value="{{ old("columns.$key", $config['columns'][$key] ?? '') }}"
-                          placeholder="Ej. Nro Operación"
-                          @disabled($readOnly)
-                        >
-                        @error('columns.'.$key)
+                        <input type="text" name="columns[{{ $key }}]"
+                          class="form-control form-control-sm @error('columns.' . $key) is-invalid @enderror"
+                          value="{{ old("columns.$key", $config['columns'][$key] ?? '') }}" placeholder="Ej. Nro Operación"
+                          @disabled($readOnly)>
+                        @error('columns.' . $key)
                           <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                       </td>
@@ -81,24 +81,20 @@
 
             <div class="form-group mt-3">
               <label for="date_format">Formato de fecha (PHP)</label>
-              <input
-                type="text"
-                name="date_format"
-                id="date_format"
+              <input type="text" name="date_format" id="date_format"
                 class="form-control @error('date_format') is-invalid @enderror"
-                value="{{ old('date_format', $config['date_format'] ?? 'Y-m-d') }}"
-                placeholder="Y-m-d"
-                @disabled($readOnly)
-              >
-              <small class="form-text text-muted">Ejemplos: <code>Y-m-d</code>, <code>d/m/Y</code>, <code>d-m-Y H:i</code>.</small>
+                value="{{ old('date_format', $config['date_format'] ?? 'Y-m-d') }}" placeholder="Y-m-d"
+                @disabled($readOnly)>
+              <small class="form-text text-muted">Ejemplos: <code>Y-m-d</code>, <code>d/m/Y</code>,
+                <code>d-m-Y H:i</code>.</small>
               @error('date_format')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
             </div>
 
-              @if (! $readOnly)
-                <button type="submit" class="btn btn-brand">Guardar formato</button>
-              @endif
+            @if (!$readOnly)
+              <button type="submit" class="btn btn-brand">Guardar formato</button>
+            @endif
           </form>
         </div>
       </div>
