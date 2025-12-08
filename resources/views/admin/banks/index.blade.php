@@ -56,7 +56,6 @@
                   <td class="text-right">
                     <a href="{{ route('admin.banks.format', $bank) }}" class="btn btn-link btn-sm">Formato</a>
                     @if ($canManageBanks)
-                      <a href="{{ route('admin.banks.edit', $bank) }}" class="btn btn-link btn-sm">Editar</a>
                       <form action="{{ route('admin.banks.destroy', $bank) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar banco?');">
                         @csrf
                         @method('DELETE')

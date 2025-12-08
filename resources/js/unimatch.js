@@ -519,14 +519,29 @@ function attachTransactionFieldListeners(container, transaction) {
       const field = input.dataset.transactionField;
       const newValue = input.value;
       persistTransactionField(transaction, field, newValue, { silent: true });
+      maybeScrollToEntryEditors(container);
     });
     input.addEventListener('change', () => {
       const field = input.dataset.transactionField;
       const newValue = input.value;
       persistTransactionField(transaction, field, newValue);
+      maybeScrollToEntryEditors(container);
     });
     input.addEventListener('click', (event) => event.stopPropagation());
   });
+}
+
+function maybeScrollToEntryEditors(container) {
+  const idInput = container.querySelector('[data-transaction-field="custom_identifier"]');
+  const dateInput = container.querySelector('[data-transaction-field="billing_reference_date"]');
+  const hasId = idInput && idInput.value.trim() !== '';
+  const hasDate = dateInput && dateInput.value.trim() !== '';
+  if (hasId && hasDate && matchDetail) {
+    const entryEditor = matchDetail.querySelector('[data-entry-field]');
+    if (entryEditor) {
+      entryEditor.closest('.detail-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
 }
 
 function buildStudentDirectory(students = []) {
@@ -654,6 +669,7 @@ const hasCreditLimit = Number.isFinite(creditLimit) && creditLimit > 0;
 if (!hasCreditLimit) {
   creditLimit = Infinity;
 }
+let matchingBusy = false;
 const DEFAULT_PANEL_VIEW = 'dashboard';
 const initialPanelView = appWrapper?.dataset.initialView || DEFAULT_PANEL_VIEW;
 const canManageBilling = appWrapper?.dataset.canManageBilling === '1';
@@ -862,6 +878,35 @@ function showToast(message) {
   setTimeout(() => {
     toast.hidden = true;
   }, 2400);
+}
+
+function toggleMatchButtons(disabled) {
+  const selectors = ['#confirm-match', '#reject-match', '#overpay-match', '#open-modal'];
+  selectors.forEach((sel) => {
+    document.querySelectorAll(sel).forEach((btn) => {
+      btn.disabled = disabled;
+      btn.classList.toggle('disabled', disabled);
+    });
+  });
+}
+
+function clearValidationMarks() {
+  if (!matchDetail) return;
+  matchDetail.querySelectorAll('.is-invalid').forEach((el) => el.classList.remove('is-invalid'));
+}
+
+function markInvalidSelectors(selectors) {
+  if (!matchDetail || !selectors?.length) return;
+  selectors.forEach((sel) => {
+    const el = matchDetail.querySelector(sel);
+    if (el) {
+      el.classList.add('is-invalid');
+    }
+  });
+  const first = matchDetail.querySelector('.is-invalid');
+  if (first) {
+    first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function applyUserProfile(user) {
@@ -1265,7 +1310,10 @@ function renderMatchDetail() {
     : formatTime(transaction.date);
   const entryIssueDate = voucher?.issueDate ? formatDate(voucher.issueDate) : '—';
   const entryRecordedValue = voucher?.recorded_date || '';
-  const entryOperation = voucher?.operation_reference || voucher?.operation_number || '';
+  const entryOperation = voucher?.operation_reference
+    || voucher?.operation_number
+    || transaction.operation_number
+    || '';
   const transactionLineId = transaction?.db_id ?? transaction?.dbId ?? transaction?.lineId ?? null;
   const entryNumericId = getEntryNumericId(voucher);
   const transactionUpdateUrl =
@@ -1558,6 +1606,11 @@ function creditMatch(defaultAmount) {
 }
 
 async function submitMatchAction(action, extraPayload = {}) {
+  if (matchingBusy) {
+    showToast('Ya se está procesando la conciliación. Espera un momento.');
+    return;
+  }
+
   const transaction = state.transactions.find((tx) => tx.id === state.ui.selectedTransaction);
   const voucher = state.reportEntries.find((vc) => vc.id === state.ui.selectedEntry);
 
@@ -1575,9 +1628,14 @@ async function submitMatchAction(action, extraPayload = {}) {
   const entryNumericId = getEntryNumericId(voucher);
   const pendingLineUpdates = transactionDbId ? state.pendingTransactionUpdates[transactionDbId] : null;
   const pendingEntryUpdates = entryNumericId ? state.pendingEntryUpdates[entryNumericId] : null;
+  const getDetailInputValue = (selector) => {
+    const el = matchDetail?.querySelector(selector);
+    return el ? el.value : '';
+  };
 
   const requiresManualIds = action === 'confirm' || action === 'credit' || action === 'reject';
   if (requiresManualIds) {
+    clearValidationMarks();
     const normalizeId = (value) => (value ?? '').toString().trim();
     const hasTransactionId = normalizeId(
       transaction.custom_id
@@ -1588,11 +1646,71 @@ async function submitMatchAction(action, extraPayload = {}) {
       voucher.custom_id
         || pendingEntryUpdates?.custom_id
     ) !== '';
-    if (!hasTransactionId || !hasEntryId) {
-      showToast('Asigna el ID manual en el extracto y en el reporte diario antes de conciliar.');
+    const hasEntryBank = normalizeId(
+      voucher.bank_name
+        || voucher.bankName
+        || pendingEntryUpdates?.bank_name
+        || getDetailInputValue('[data-entry-field=\"bank_name\"]')
+    ) !== '';
+    const hasEntryRecordedDate = normalizeId(
+      voucher.recorded_date
+        || pendingEntryUpdates?.recorded_date
+        || getDetailInputValue('[data-entry-field=\"recorded_date\"]')
+    ) !== '';
+    const hasEntryOperation = normalizeId(
+      voucher.operation_reference
+        || voucher.operation_number
+        || pendingEntryUpdates?.operation_reference
+        || getDetailInputValue('[data-entry-field=\"operation_reference\"]')
+    ) !== '';
+    const hasTxBillingDate = normalizeId(
+      transaction.billing_reference_date
+        || pendingLineUpdates?.billing_reference_date
+    ) !== '';
+
+    const missing = [];
+    const missingSelectors = [];
+    if (!hasTransactionId) {
+      missing.push('ID manual del extracto');
+      missingSelectors.push('[data-transaction-field="custom_identifier"]');
+    }
+    if (!hasTxBillingDate) {
+      missing.push('Fecha del extracto (facturación)');
+      missingSelectors.push('[data-transaction-field="billing_reference_date"]');
+    }
+    if (!hasEntryId) {
+      missing.push('ID manual del reporte diario');
+      missingSelectors.push('[data-entry-field="custom_id"]');
+    }
+    if (!hasEntryBank) {
+      missing.push('Banco en reporte diario');
+      missingSelectors.push('[data-entry-field="bank_name"]');
+    }
+    if (!hasEntryRecordedDate) {
+      missing.push('Fecha del reporte diario');
+      missingSelectors.push('[data-entry-field="recorded_date"]');
+    }
+    if (!hasEntryOperation) {
+      missing.push('Operación en reporte diario');
+      missingSelectors.push('[data-entry-field="operation_reference"]');
+    }
+
+    const mustCheckAll = action === 'confirm' || action === 'credit';
+    const mustCheckIdsOnly = action === 'reject';
+    const isMissingCritical = mustCheckAll ? missing.length > 0 : (!hasTransactionId || !hasEntryId);
+
+    if (isMissingCritical) {
+      const message = mustCheckAll
+        ? `Completa los campos requeridos antes de continuar: ${missing.join(', ')}.`
+        : 'Asigna el ID manual en el extracto y en el reporte diario antes de conciliar.';
+      markInvalidSelectors(missingSelectors);
+      showToast(message);
       return;
     }
   }
+
+  matchingBusy = true;
+  toggleMatchButtons(true);
 
   const lineUpdates = pendingLineUpdates;
   const entryUpdates = pendingEntryUpdates;
@@ -1635,6 +1753,9 @@ async function submitMatchAction(action, extraPayload = {}) {
   } catch (error) {
     console.error(error);
     showToast('Ocurrió un error al procesar la acción.');
+  } finally {
+    matchingBusy = false;
+    toggleMatchButtons(false);
   }
 }
 

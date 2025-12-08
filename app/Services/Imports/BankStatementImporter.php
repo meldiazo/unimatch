@@ -193,6 +193,14 @@ class BankStatementImporter
     {
         $shortCode = strtoupper($bank->short_code);
 
+        $strategy = Arr::get($bank->format_config, 'strategy');
+        if ($strategy === 'custom') {
+            $custom = $this->parseCustomSheet($bank, $path);
+            if (! empty($custom)) {
+                return $custom;
+            }
+        }
+
         return match ($shortCode) {
             'BNB' => $this->parseBnbSheet($path),
             'BE' => $this->parseEconomicoSheet($path),
@@ -906,6 +914,114 @@ class BankStatementImporter
             strictHeaders: true,
             formatLabel: 'Banco Unión'
         );
+    }
+
+    private function parseCustomSheet(Bank $bank, string $path): array
+    {
+        $config = $bank->format_config ?? [];
+        $columns = Arr::get($config, 'columns', []);
+        if (empty($columns)) {
+            return [];
+        }
+        $columnsIndex = Arr::get($config, 'columns_index', []);
+
+        $rows = $this->parseExcelRows($path);
+        if (empty($rows)) {
+            $rows = $this->parseCsv($path);
+        }
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $headerRow = max(0, (int) (($config['header_row'] ?? 1) - 1));
+        $headers = $rows[$headerRow] ?? null;
+        if (! $headers) {
+            return [];
+        }
+
+        $normalizedHeaders = array_map([$this, 'normalizeHeader'], $headers);
+        $positions = [];
+        foreach ($columns as $field => $headerName) {
+            $indexCandidate = $columnsIndex[$field] ?? null;
+            if ($indexCandidate !== null && (int) $indexCandidate > 0) {
+                $positions[$field] = ((int) $indexCandidate) - 1;
+                continue;
+            }
+            if ($headerName) {
+                $normalizedTarget = $this->normalizeHeader($headerName);
+                $idx = array_search($normalizedTarget, $normalizedHeaders, true);
+                if ($idx !== false) {
+                    $positions[$field] = $idx;
+                }
+            }
+        }
+
+        if (! isset($positions['operation_number'])) {
+            throw new InvalidArgumentException('El formato personalizado debe indicar la columna de número de operación.');
+        }
+
+        $normalized = [];
+        for ($i = $headerRow + 1; $i < count($rows); $i++) {
+            $row = $rows[$i];
+            if (count(array_filter($row, fn ($v) => trim((string) $v) !== '')) === 0) {
+                continue;
+            }
+
+            $get = function (string $key) use ($positions, $row) {
+                return isset($positions[$key]) ? ($row[$positions[$key]] ?? null) : null;
+            };
+
+            $operationNumber = trim((string) $get('operation_number'));
+            if ($operationNumber === '') {
+                continue;
+            }
+
+            $operationDateRaw = $get('operation_date');
+            $operationDate = $this->castCustomDate($operationDateRaw, $config['date_format'] ?? null);
+
+            $debit = $get('debit_amount');
+            $credit = $get('credit_amount');
+            $amount = $get('amount');
+            if ($debit === null && $credit === null && $amount !== null) {
+                $signed = $this->parseAmount($amount);
+                if ($signed < 0) {
+                    $debit = abs($signed);
+                } else {
+                    $credit = $signed;
+                }
+            }
+
+            $normalized[] = [
+                'operation_number' => $operationNumber,
+                'description' => $get('description') ?? $get('reference'),
+                'reference' => $get('reference'),
+                'operation_date' => $operationDate,
+                'value_date' => $operationDate,
+                'transaction_time' => $this->parseTimeValue($get('transaction_time')),
+                'office' => $get('office'),
+                'debit_amount' => $debit !== null ? $this->parseAmount($debit) : null,
+                'credit_amount' => $credit !== null ? $this->parseAmount($credit) : null,
+                'running_balance' => $get('running_balance') !== null ? $this->parseAmount($get('running_balance')) : null,
+                'currency' => 'BOB',
+                'raw_payload' => $row,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function castCustomDate($value, ?string $format): ?Carbon
+    {
+        if ($format) {
+            try {
+                return Carbon::createFromFormat($format, (string) $value);
+            } catch (\Throwable) {
+                // fallback
+            }
+        }
+
+        return $this->castDateValue($value);
     }
 
     private function normalizeOperationKey(null|string $value): string

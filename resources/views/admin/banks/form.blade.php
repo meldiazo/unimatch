@@ -50,17 +50,16 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="format_config">Configuración de formato (JSON)</label>
-              <textarea name="format_config" id="format_config" rows="6" class="form-control @error('format_config') is-invalid @enderror" placeholder='{"columns":{"operation_number":"operacion"}}'>{{ old('format_config', $bank->format_config ? json_encode($bank->format_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '') }}</textarea>
-              @error('format_config')
-                <div class="invalid-feedback">{{ $message }}</div>
-              @enderror
-            </div>
-
             <button type="submit" class="btn btn-brand">
               {{ $bank->exists ? 'Actualizar' : 'Crear banco' }}
             </button>
+
+            <p class="small text-muted mt-3 mb-0">
+              Después de guardar, define el formato del archivo del banco en
+              <a href="{{ $bank->exists ? route('admin.banks.format', $bank) : '#' }}" class="{{ $bank->exists ? '' : 'disabled' }}">
+                “Formato de importación”
+              </a>.
+            </p>
           </form>
         </div>
       </div>
