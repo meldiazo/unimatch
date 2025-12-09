@@ -177,10 +177,19 @@ class MatchingController extends Controller
 
     private function ensureManualIdentifiers(BankStatementLine $line, SalesBookEntry $entry): ?JsonResponse
     {
-        if (! filled($line->custom_identifier) || ! filled($entry->custom_id)) {
-            return response()->json([
-                'message' => 'Debes asignar los ID manuales en el extracto y en el reporte diario antes de conciliar.',
-            ], 422);
+        $wasUpdated = false;
+
+        if (! filled($line->custom_identifier)) {
+            // Generate a shorter ID: MAN- + 6 random chars
+            $line->custom_identifier = 'MAN-' . strtoupper(substr(md5(uniqid()), 0, 6));
+            $line->save();
+            $wasUpdated = true;
+        }
+
+        if (! filled($entry->custom_id)) {
+            $entry->custom_id = 'MAN-' . strtoupper(substr(md5(uniqid()), 0, 6));
+            $entry->save();
+            $wasUpdated = true;
         }
 
         return null;

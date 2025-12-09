@@ -1341,18 +1341,38 @@ function renderMatchDetail() {
     </div>
     <div class="detail-grid">
       ${transactionColumns
-        .map(
-          (col) => `
+      .map(
+        (col) => `
             <div>
               <span class="detail-label">${col.label}</span>
               <p class="detail-value">${col.value}</p>
             </div>
           `
-        )
-        .join('')}
+      )
+      .join('')}
     </div>
   `;
   matchDetail.appendChild(txCard);
+
+  function generateManualId() {
+    return 'MAN-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+  }
+
+  function getTodayDateString() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const defaultTxId = transaction.custom_id || generateManualId();
+  if (!transaction.custom_id) {
+    // Queue the auto-generated ID to be saved
+    persistTransactionField(transaction, 'custom_identifier', defaultTxId, { silent: true });
+  }
+
+  // Use today's date if billing_reference_date is empty
+  const defaultBillingDate = transaction.billing_reference_date || getTodayDateString();
+  if (!transaction.billing_reference_date) {
+    persistTransactionField(transaction, 'billing_reference_date', defaultBillingDate, { silent: true });
+  }
 
   const txEditCard = document.createElement('div');
   txEditCard.className = 'detail-card';
@@ -1362,14 +1382,14 @@ function renderMatchDetail() {
         type="text"
         class="form-control form-control-sm"
         placeholder="ID manual"
-        value="${escapeHtml(transaction.custom_id || '')}"
+        value="${escapeHtml(defaultTxId)}"
         data-transaction-field="custom_identifier"
         data-update-url="${escapeHtml(transactionUpdateUrl || '')}"
       >
       <input
         type="date"
         class="form-control form-control-sm"
-        value="${transaction.billing_reference_date || ''}"
+        value="${escapeHtml(defaultBillingDate)}"
         min="${transaction.date ? escapeHtml(transaction.date.slice(0, 10)) : ''}"
         data-transaction-field="billing_reference_date"
         data-update-url="${escapeHtml(transactionUpdateUrl || '')}"
@@ -1412,18 +1432,45 @@ function renderMatchDetail() {
     </div>
     <div class="detail-grid">
       ${voucherColumns
-        .map(
-          (col) => `
+      .map(
+        (col) => `
             <div>
               <span class="detail-label">${col.label}</span>
               <p class="detail-value">${col.value}</p>
             </div>
           `
-        )
-        .join('')}
+      )
+      .join('')}
     </div>
   `;
   matchDetail.appendChild(voucherCard);
+
+  const defaultEntryId = voucher.custom_id || generateManualId();
+  if (!voucher.custom_id) {
+    persistEntryField(voucher, 'custom_id', defaultEntryId, { silent: true });
+  }
+
+  const defaultBankName = voucher.bank_name || voucher.bankName || transaction.bankName || getBankName(transaction.bankId) || '';
+  if (!voucher.bank_name && !voucher.bankName && defaultBankName) {
+    persistEntryField(voucher, 'bank_name', defaultBankName, { silent: true });
+    // Keep object state in sync immediately so re-renders or other logic sees it
+    voucher.bank_name = defaultBankName;
+    voucher.bankName = defaultBankName;
+  }
+
+  // Use today's date if recorded_date is empty
+  const defaultRecordedDate = voucher.recorded_date || getTodayDateString();
+  if (!voucher.recorded_date) {
+    persistEntryField(voucher, 'recorded_date', defaultRecordedDate, { silent: true });
+    voucher.recorded_date = defaultRecordedDate;
+  }
+
+  const defaultOperation = voucher.operation_reference || voucher.operation_number || transaction.operation_number || '';
+  if (!voucher.operation_reference && !voucher.operation_number && defaultOperation) {
+    persistEntryField(voucher, 'operation_reference', defaultOperation, { silent: true });
+    voucher.operation_reference = defaultOperation;
+  }
+
 
   const editCard = document.createElement('div');
   editCard.className = 'detail-card';
@@ -1434,7 +1481,7 @@ function renderMatchDetail() {
         class="form-control form-control-sm"
         placeholder="ID manual"
         data-entry-field="custom_id"
-        value="${escapeHtml(voucher.custom_id || '')}"
+        value="${escapeHtml(defaultEntryId)}"
         data-update-url="${escapeHtml(entryUpdateUrl || '')}"
       >
       <input
@@ -1442,14 +1489,14 @@ function renderMatchDetail() {
         class="form-control form-control-sm"
         placeholder="Banco"
         data-entry-field="bank_name"
-        value="${escapeHtml(voucher.bank_name || voucher.bankName || '')}"
+        value="${escapeHtml(defaultBankName)}"
         data-update-url="${escapeHtml(entryUpdateUrl || '')}"
       >
       <input
         type="date"
         class="form-control form-control-sm"
         data-entry-field="recorded_date"
-        value="${escapeHtml(entryRecordedValue)}"
+        value="${escapeHtml(defaultRecordedDate)}"
         data-update-url="${escapeHtml(entryUpdateUrl || '')}"
         ${voucher.issueDate ? `min="${escapeHtml(voucher.issueDate)}"` : ''}
       >
@@ -1458,13 +1505,18 @@ function renderMatchDetail() {
         class="form-control form-control-sm"
         placeholder="Operación"
         data-entry-field="operation_reference"
-        value="${escapeHtml(entryOperation)}"
+        value="${escapeHtml(defaultOperation)}"
         data-update-url="${escapeHtml(entryUpdateUrl || '')}"
       >
     </div>
   `;
   matchDetail.appendChild(editCard);
   attachEntryFieldListeners(editCard, voucher);
+
+  // Auto-scroll to bottom to make the "Confirmar" button visible
+  setTimeout(() => {
+    matchDetail.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, 100);
 
   const differenceCard = document.createElement('div');
   differenceCard.className = 'detail-card';
@@ -1490,8 +1542,8 @@ function renderMatchDetail() {
   actionCard.innerHTML = `
     <p class="mb-3">
       ${hasOverpayment
-        ? `Hay un excedente de ${formatCurrency(difference)}. Puedes registrarlo como demasía para acreditarlo al estudiante.`
-        : 'Revisa la información para confirmar o rechazar la conciliación.'}
+      ? `Hay un excedente de ${formatCurrency(difference)}. Puedes registrarlo como demasía para acreditarlo al estudiante.`
+      : 'Revisa la información para confirmar o rechazar la conciliación.'}
     </p>
     <div class="btn-group btn-group-sm flex-wrap" role="group">
       <button class="btn btn-outline-danger" id="reject-match">Rechazar</button>
@@ -1639,33 +1691,33 @@ async function submitMatchAction(action, extraPayload = {}) {
     const normalizeId = (value) => (value ?? '').toString().trim();
     const hasTransactionId = normalizeId(
       transaction.custom_id
-        || transaction.custom_identifier
-        || pendingLineUpdates?.custom_identifier
+      || transaction.custom_identifier
+      || pendingLineUpdates?.custom_identifier
     ) !== '';
     const hasEntryId = normalizeId(
       voucher.custom_id
-        || pendingEntryUpdates?.custom_id
+      || pendingEntryUpdates?.custom_id
     ) !== '';
     const hasEntryBank = normalizeId(
       voucher.bank_name
-        || voucher.bankName
-        || pendingEntryUpdates?.bank_name
-        || getDetailInputValue('[data-entry-field=\"bank_name\"]')
+      || voucher.bankName
+      || pendingEntryUpdates?.bank_name
+      || getDetailInputValue('[data-entry-field=\"bank_name\"]')
     ) !== '';
     const hasEntryRecordedDate = normalizeId(
       voucher.recorded_date
-        || pendingEntryUpdates?.recorded_date
-        || getDetailInputValue('[data-entry-field=\"recorded_date\"]')
+      || pendingEntryUpdates?.recorded_date
+      || getDetailInputValue('[data-entry-field=\"recorded_date\"]')
     ) !== '';
     const hasEntryOperation = normalizeId(
       voucher.operation_reference
-        || voucher.operation_number
-        || pendingEntryUpdates?.operation_reference
-        || getDetailInputValue('[data-entry-field=\"operation_reference\"]')
+      || voucher.operation_number
+      || pendingEntryUpdates?.operation_reference
+      || getDetailInputValue('[data-entry-field=\"operation_reference\"]')
     ) !== '';
     const hasTxBillingDate = normalizeId(
       transaction.billing_reference_date
-        || pendingLineUpdates?.billing_reference_date
+      || pendingLineUpdates?.billing_reference_date
     ) !== '';
 
     const missing = [];
