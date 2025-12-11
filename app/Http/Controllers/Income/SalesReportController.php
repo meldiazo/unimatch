@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Income;
 
 use App\Http\Controllers\Controller;
 use App\Models\SalesBookEntry;
+use App\Models\Bank;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -17,13 +18,22 @@ class SalesReportController extends Controller
     public function index(Request $request): View
     {
         $entries = SalesBookEntry::with('batch')
+            ->when($request->filled('start_date'), fn($q) => $q->whereDate('invoice_date', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->whereDate('invoice_date', '<=', $request->end_date))
+            ->when($request->filled('status'), fn($q) => $q->where('state_label', $request->status))
+            ->when($request->filled('bank'), fn($q) => $q->where('bank_name', $request->bank))
             ->latest('invoice_date')
             ->latest('id')
             ->paginate(50)
             ->withQueryString();
 
+        $banks = SalesBookEntry::distinct('bank_name')->whereNotNull('bank_name')->orderBy('bank_name')->pluck('bank_name');
+        $statuses = SalesBookEntry::distinct('state_label')->whereNotNull('state_label')->orderBy('state_label')->pluck('state_label');
+
         return view('ingresos.sales_report.index', [
             'entries' => $entries,
+            'banks' => $banks,
+            'statuses' => $statuses,
         ]);
     }
 
@@ -32,6 +42,10 @@ class SalesReportController extends Controller
         $format = strtolower($request->query('format', 'pdf'));
 
         $entries = SalesBookEntry::with('batch')
+            ->when($request->filled('start_date'), fn($q) => $q->whereDate('invoice_date', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->whereDate('invoice_date', '<=', $request->end_date))
+            ->when($request->filled('status'), fn($q) => $q->where('state_label', $request->status))
+            ->when($request->filled('bank'), fn($q) => $q->where('bank_name', $request->bank))
             ->orderBy('invoice_date')
             ->orderBy('id')
             ->get();

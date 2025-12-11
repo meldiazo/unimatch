@@ -1,6 +1,6 @@
 @extends('layouts.ingresos')
 
-@section('title', 'UniMatch | Extractos cargados')
+@section('title', 'UniMatch | Reporte de extractos')
 @section('panel-active-menu', 'statements')
 
 @section('panel-content')
@@ -15,13 +15,13 @@
     <div class="container-fluid">
       <div class="row mb-2">
         <div class="col-sm-6">
-          <h1 class="h4 mb-0">Extractos cargados</h1>
+          <h1 class="h4 mb-0">Reporte de extractos</h1>
           <p class="text-muted mb-0 small">Revisa el histórico de líneas importadas como si estuvieras en Excel.</p>
         </div>
         <div class="col-sm-6">
           <ol class="breadcrumb float-sm-right">
             <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Ingresos</a></li>
-            <li class="breadcrumb-item active">Extractos cargados</li>
+            <li class="breadcrumb-item active">Reporte de extractos</li>
           </ol>
         </div>
       </div>
@@ -50,6 +50,46 @@
           </button>
         </div>
       @endif
+
+      <div class="card card-outline card-primary collapsed-card">
+        <div class="card-header">
+          <h3 class="card-title">Filtros de búsqueda</h3>
+          <div class="card-tools">
+            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="card-body" style="display: none;">
+          <form action="{{ route('ingresos.statements.index') }}" method="GET">
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-group">
+                  <label for="start_date">Fecha inicio</label>
+                  <input type="date" class="form-control" name="start_date" id="start_date" value="{{ request('start_date') }}">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-group">
+                  <label for="end_date">Fecha fin</label>
+                  <input type="date" class="form-control" name="end_date" id="end_date" value="{{ request('end_date') }}">
+                </div>
+              </div>
+              <div class="col-md-4 d-flex align-items-end">
+                <div class="form-group w-100 d-flex">
+                  <button type="submit" class="btn btn-primary flex-fill mr-2">
+                    <i class="fas fa-search mr-1"></i> Filtrar
+                  </button>
+                  <a href="{{ route('ingresos.statements.index') }}" class="btn btn-default">
+                    <i class="fas fa-times mr-1"></i> Limpiar
+                  </a>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div class="card card-outline card-info">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h3 class="card-title mb-0">Detalle tipo Excel</h3>
@@ -60,13 +100,13 @@
               </span>
             @endif
             <div class="btn-group btn-group-sm" role="group" aria-label="Descargar extractos">
-              <a href="{{ route('ingresos.statements.export', ['format' => 'pdf']) }}" class="btn btn-default">
+              <a href="{{ route('ingresos.statements.export', array_merge(['format' => 'pdf'], request()->query())) }}" class="btn btn-default">
                 <i class="fas fa-file-pdf text-danger"></i> PDF
               </a>
-              <a href="{{ route('ingresos.statements.export', ['format' => 'xls']) }}" class="btn btn-default">
+              <a href="{{ route('ingresos.statements.export', array_merge(['format' => 'xls'], request()->query())) }}" class="btn btn-default">
                 <i class="fas fa-file-excel text-success"></i> XLS
               </a>
-              <a href="{{ route('ingresos.statements.export', ['format' => 'txt']) }}" class="btn btn-default">
+              <a href="{{ route('ingresos.statements.export', array_merge(['format' => 'txt'], request()->query())) }}" class="btn btn-default">
                 <i class="fas fa-file-alt"></i> TXT
               </a>
             </div>

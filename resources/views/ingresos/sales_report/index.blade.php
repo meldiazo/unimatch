@@ -51,6 +51,68 @@
         </div>
       @endif
 
+
+      <div class="card card-outline card-primary collapsed-card">
+        <div class="card-header">
+          <h3 class="card-title">Filtros de búsqueda</h3>
+          <div class="card-tools">
+            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="card-body" style="display: none;">
+          <form action="{{ route('ingresos.sales-report.index') }}" method="GET">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="form-group">
+                <label for="start_date">Fecha inicio</label>
+                <input type="date" class="form-control" name="start_date" id="start_date" value="{{ request('start_date') }}">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-group">
+                <label for="end_date">Fecha fin</label>
+                <input type="date" class="form-control" name="end_date" id="end_date" value="{{ request('end_date') }}">
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="form-group">
+                <label for="bank">Banco</label>
+                <select class="form-control" name="bank" id="bank">
+                  <option value="">Todos</option>
+                  @foreach($banks as $b)
+                    <option value="{{ $b }}" {{ request('bank') == $b ? 'selected' : '' }}>{{ $b }}</option>
+                  @endforeach
+                </select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="form-group">
+                <label for="status">Estado</label>
+                <select class="form-control" name="status" id="status">
+                  <option value="">Todos</option>
+                  @foreach($statuses as $s)
+                    <option value="{{ $s }}" {{ request('status') == $s ? 'selected' : '' }}>{{ $s }}</option>
+                  @endforeach
+                </select>
+              </div>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <div class="form-group w-100 d-flex">
+                <button type="submit" class="btn btn-primary flex-fill mr-2">
+                  <i class="fas fa-search mr-1"></i>
+                </button>
+                <a href="{{ route('ingresos.sales-report.index') }}" class="btn btn-default" title="Limpiar filtros">
+                  <i class="fas fa-times"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+          </form>
+        </div>
+      </div>
+
       <div class="card card-outline card-primary">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h3 class="card-title mb-0">Detalle tipo Excel</h3>
@@ -61,13 +123,13 @@
               </span>
             @endif
             <div class="btn-group btn-group-sm" role="group" aria-label="Descargar reporte diario">
-              <a href="{{ route('ingresos.sales-report.export', ['format' => 'pdf']) }}" class="btn btn-default">
+              <a href="{{ route('ingresos.sales-report.export', array_merge(['format' => 'pdf'], request()->query())) }}" class="btn btn-default">
                 <i class="fas fa-file-pdf text-danger"></i> PDF
               </a>
-              <a href="{{ route('ingresos.sales-report.export', ['format' => 'xls']) }}" class="btn btn-default">
+              <a href="{{ route('ingresos.sales-report.export', array_merge(['format' => 'xls'], request()->query())) }}" class="btn btn-default">
                 <i class="fas fa-file-excel text-success"></i> XLS
               </a>
-              <a href="{{ route('ingresos.sales-report.export', ['format' => 'txt']) }}" class="btn btn-default">
+              <a href="{{ route('ingresos.sales-report.export', array_merge(['format' => 'txt'], request()->query())) }}" class="btn btn-default">
                 <i class="fas fa-file-alt"></i> TXT
               </a>
             </div>

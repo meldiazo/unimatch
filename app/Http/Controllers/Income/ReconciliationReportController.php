@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Income;
 
 use App\Http\Controllers\Controller;
+use App\Models\Bank;
 use App\Models\Transaction;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\View\View;
@@ -11,20 +12,34 @@ use Illuminate\Support\Collection;
 
 class ReconciliationReportController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $transactions = Transaction::with([
             'salesEntry',
             'line.statement.account.bank',
             'matchedBy',
         ])
+            ->when($request->filled('start_date'), fn($q) => $q->whereDate('matched_at', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->whereDate('matched_at', '<=', $request->end_date))
+            ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
+            ->when($request->filled('bank'), function ($q) use ($request) {
+                $q->where(function ($sub) use ($request) {
+                    $sub->whereHas('salesEntry', fn($q2) => $q2->where('bank_name', $request->bank))
+                        ->orWhereHas('line.statement.account.bank', fn($q3) => $q3->where('name', $request->bank));
+                });
+            })
             ->latest('matched_at')
             ->latest('id')
             ->paginate(50)
             ->withQueryString();
 
+        $banks = Bank::orderBy('name')->pluck('name');
+        $statuses = ['conciliado', 'demasia', 'rechazado'];
+
         return view('ingresos.reconciliations.index', [
             'transactions' => $transactions,
+            'banks' => $banks,
+            'statuses' => $statuses,
         ]);
     }
 
@@ -37,6 +52,15 @@ class ReconciliationReportController extends Controller
             'line.statement.account.bank',
             'matchedBy',
         ])
+            ->when($request->filled('start_date'), fn($q) => $q->whereDate('matched_at', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->whereDate('matched_at', '<=', $request->end_date))
+            ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
+            ->when($request->filled('bank'), function ($q) use ($request) {
+                $q->where(function ($sub) use ($request) {
+                    $sub->whereHas('salesEntry', fn($q2) => $q2->where('bank_name', $request->bank))
+                        ->orWhereHas('line.statement.account.bank', fn($q3) => $q3->where('name', $request->bank));
+                });
+            })
             ->orderBy('matched_at')
             ->orderBy('id')
             ->get();

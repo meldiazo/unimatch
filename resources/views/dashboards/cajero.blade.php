@@ -8,7 +8,7 @@
   @php
     $resources = [
         [
-            'title' => 'Extractos cargados',
+            'title' => 'Reporte de extractos',
             'description' => 'Consulta el detalle tipo Excel de cada línea importada desde los bancos.',
             'view_route' => route('ingresos.statements.index'),
             'exports' => [

@@ -20,6 +20,8 @@ class StatementController extends Controller
                 'statement.account.bank',
                 'statement.importBatch',
             ])
+            ->when($request->filled('start_date'), fn($q) => $q->whereDate('operation_date', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->whereDate('operation_date', '<=', $request->end_date))
             ->latest('operation_date')
             ->latest('id')
             ->paginate(50)
@@ -35,6 +37,8 @@ class StatementController extends Controller
         $format = strtolower($request->query('format', 'pdf'));
 
         $lines = BankStatementLine::with(['statement.account.bank'])
+            ->when($request->filled('start_date'), fn($q) => $q->whereDate('operation_date', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->whereDate('operation_date', '<=', $request->end_date))
             ->orderBy('operation_date')
             ->orderBy('id')
             ->get();

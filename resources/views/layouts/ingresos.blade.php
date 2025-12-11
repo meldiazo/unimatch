@@ -94,9 +94,33 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-table"></i>
+                  <p>Reporte de extractos</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.sales-report.index') }}" class="nav-link {{ $salesReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-book"></i>
+                  <p>Reporte diario</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('ingresos.reconciliation-report.index') }}" class="nav-link {{ $reconciliationReportActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-list"></i>
+                  <p>Reporte de conciliaciones</p>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="{{ route('admin.dashboard', ['view' => 'students']) }}" class="nav-link {{ $activeMenu === 'students' ? 'active' : '' }}">
                   <i class="nav-icon fas fa-user-check"></i>
                   <p>Seguimiento de estudiantes</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.users.index') }}" class="nav-link {{ $usersActive ? 'active' : '' }}">
+                  <i class="nav-icon fas fa-users-cog"></i>
+                  <p>Gestión de usuarios</p>
                 </a>
               </li>
               <li class="nav-item">
@@ -111,30 +135,6 @@
                   <p>Parámetros de conciliación</p>
                 </a>
               </li>
-              <li class="nav-item">
-                <a href="{{ route('ingresos.reconciliation-report.index') }}" class="nav-link {{ $reconciliationReportActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-list"></i>
-                  <p>Reporte de conciliaciones</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-table"></i>
-                  <p>Extractos cargados</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="{{ route('admin.users.index') }}" class="nav-link {{ $usersActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-users-cog"></i>
-                  <p>Gestión de usuarios</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="{{ route('ingresos.sales-report.index') }}" class="nav-link {{ $salesReportActive ? 'active' : '' }}">
-                  <i class="nav-icon fas fa-book"></i>
-                  <p>Reporte diario</p>
-                </a>
-              </li>
             </ul>
           @elseif ($isCashierPanel)
             <ul class="nav nav-pills nav-sidebar flex-column">
@@ -147,7 +147,7 @@
               <li class="nav-item">
                 <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-table"></i>
-                  <p>Extractos cargados</p>
+                  <p>Reporte de extractos</p>
                 </a>
               </li>
               <li class="nav-item">
@@ -180,13 +180,7 @@
               <li class="nav-item">
                 <a href="{{ route('ingresos.statements.index') }}" class="nav-link {{ $statementsActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-table"></i>
-                  <p>Extractos cargados</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="{{ route('dashboard', ['view' => 'students']) }}" class="nav-link {{ $activeMenu === 'students' ? 'active' : '' }}" data-target="students">
-                  <i class="nav-icon fas fa-user-check"></i>
-                  <p>Seguimiento de estudiantes</p>
+                  <p>Reporte de extractos</p>
                 </a>
               </li>
               <li class="nav-item">
@@ -199,6 +193,12 @@
                 <a href="{{ route('ingresos.reconciliation-report.index') }}" class="nav-link {{ $reconciliationReportActive ? 'active' : '' }}">
                   <i class="nav-icon fas fa-list"></i>
                   <p>Reporte de conciliaciones</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('dashboard', ['view' => 'students']) }}" class="nav-link {{ $activeMenu === 'students' ? 'active' : '' }}" data-target="students">
+                  <i class="nav-icon fas fa-user-check"></i>
+                  <p>Seguimiento de estudiantes</p>
                 </a>
               </li>
               <li class="nav-item">

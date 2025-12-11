@@ -65,8 +65,13 @@
           @php
             $wasSubmitted = (int) old('bank_id') === $bank->id;
           @endphp
-          <div class="card card-primary card-outline mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
+          <div class="card card-primary card-outline collapsed-card mb-3">
+            <div class="card-header d-flex align-items-center">
+              <div class="card-tools mr-3 pl-1">
+                <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
               <div>
                 <h4 class="card-title mb-0">
                   <i class="fas fa-file-upload mr-2"></i>Importar extracto · {{ $bank->name }}
@@ -117,8 +122,13 @@
           </div>
         @endforeach
 
-        <div class="card card-info card-outline mb-3">
-          <div class="card-header">
+        <div class="card card-info card-outline collapsed-card mb-3">
+          <div class="card-header d-flex align-items-center">
+            <div class="card-tools mr-3 pl-1">
+              <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
             <h4 class="card-title mb-0"><i class="fas fa-book mr-2"></i>Subir reporte diario de ingresos</h4>
           </div>
           <div class="card-body">
@@ -198,7 +208,7 @@
               <div class="small-box bg-danger elevation-2 summary-filter" data-filter-view="matching" data-filter-status="flagged">
                 <div class="inner">
                   <h3 id="alerts-count">0</h3>
-                  <p>Alertas activas</p>
+                  <p>Discrepancias activas</p>
                   <small>Discrepancias actuales</small>
                 </div>
                 <div class="icon">
@@ -235,13 +245,13 @@
                 <div class="card-header border-0 d-flex align-items-center justify-content-between">
                   <h3 class="card-title mb-0">
                     <i class="fas fa-bell mr-2"></i>
-                    Alertas recientes
+                    Discrepancias recientes
                   </h3>
                   <button type="button" class="btn btn-link btn-sm p-0" id="view-all-alerts">Ver todas</button>
                 </div>
                 <div class="card-body p-0">
                   <div class="empty-state mb-0 rounded-0 border-0" id="alerts-empty">
-                    <p class="mb-0">Sin alertas críticas. Todo al día.</p>
+                    <p class="mb-0">Sin discrepancias críticas. Todo al día.</p>
                   </div>
                   <ul class="alert-list list-unstyled mb-0" id="alert-list"></ul>
                 </div>

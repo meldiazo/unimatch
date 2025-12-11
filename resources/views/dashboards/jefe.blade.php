@@ -21,7 +21,7 @@
         <div class="row mb-2 align-items-center">
           <div class="col-sm-6">
             <h1 class="m-0">Visión financiera consolidada</h1>
-            <small class="text-muted">Estados de facturación, extractos y alertas críticas.</small>
+            <small class="text-muted">Estados de facturación, extractos y discrepancias.</small>
           </div>
           <div class="col-sm-6">
             <ol class="breadcrumb float-sm-right mb-0">
@@ -38,19 +38,19 @@
           <div class="col-lg-3 col-6">
             <div class="small-box bg-primary elevation-2">
               <div class="inner">
-                <h3>Bs {{ number_format($totals['facturado_hoy'], 2, ',', '.') }}</h3>
-                <p>Facturado hoy</p>
+                <h3>Bs {{ number_format($totals['conciliado_hoy'], 2, ',', '.') }}</h3>
+                <p>Conciliado hoy</p>
               </div>
               <div class="icon">
-                <i class="fas fa-file-invoice-dollar"></i>
+                <i class="fas fa-money-bill-wave"></i>
               </div>
             </div>
           </div>
           <div class="col-lg-3 col-6">
             <div class="small-box bg-success elevation-2">
               <div class="inner">
-                <h3>{{ number_format($totals['operaciones_facturadas']) }}</h3>
-                <p>Operaciones facturadas</p>
+                <h3>{{ number_format($totals['conciliaciones_total']) }}</h3>
+                <p>Total Conciliaciones</p>
               </div>
               <div class="icon">
                 <i class="fas fa-check-circle"></i>
@@ -60,11 +60,11 @@
           <div class="col-lg-3 col-6">
             <div class="small-box bg-warning elevation-2">
               <div class="inner">
-                <h3>{{ number_format($totals['operaciones_sin_factura']) }}</h3>
-                <p>Operaciones sin factura</p>
+                <h3>{{ number_format($totals['pagos_demasia']) }}</h3>
+                <p>Pagos en demasía</p>
               </div>
               <div class="icon">
-                <i class="fas fa-exclamation-circle"></i>
+                <i class="fas fa-hand-holding-usd"></i>
               </div>
             </div>
           </div>
@@ -72,7 +72,7 @@
             <div class="small-box bg-danger elevation-2">
               <div class="inner">
                 <h3>{{ number_format($totals['alertas']) }}</h3>
-                <p>Alertas críticas</p>
+                <p>Discrepancias</p>
               </div>
               <div class="icon">
                 <i class="fas fa-bell"></i>
@@ -85,11 +85,11 @@
           <div class="col-lg-8">
             <div class="card card-outline card-brand h-100">
               <div class="card-header border-0">
-                <h3 class="card-title mb-0"><i class="fas fa-chart-line mr-2"></i>Tendencia de facturación (7 días)</h3>
+                <h3 class="card-title mb-0"><i class="fas fa-chart-line mr-2"></i>Tendencia de conciliación (7 días)</h3>
               </div>
               <div class="card-body" style="height: 320px;">
                 <div class="h-100">
-                  <canvas id="executive-trend" height="280" aria-label="Tendencia de facturación"></canvas>
+                  <canvas id="executive-trend" height="280" aria-label="Tendencia de conciliación"></canvas>
                 </div>
               </div>
             </div>
@@ -97,7 +97,7 @@
           <div class="col-lg-4">
             <div class="card card-outline card-danger h-100">
               <div class="card-header border-0 d-flex justify-content-between align-items-center">
-                <h3 class="card-title mb-0"><i class="fas fa-exclamation-triangle mr-2"></i>Alertas críticas</h3>
+                <h3 class="card-title mb-0"><i class="fas fa-exclamation-triangle mr-2"></i>Discrepancias</h3>
                 <span class="badge badge-danger">{{ $alerts->count() }}</span>
               </div>
               <div class="card-body p-0" style="max-height: 360px; overflow-y: auto;">
@@ -115,7 +115,7 @@
                       </div>
                     </li>
                   @empty
-                    <li class="list-group-item text-center text-muted">Sin alertas activas.</li>
+                    <li class="list-group-item text-center text-muted">Sin discrepancias activas.</li>
                   @endforelse
                 </ul>
               </div>
@@ -218,18 +218,18 @@
           labels: data.labels,
           datasets: [
             {
-              label: 'Facturado',
-              data: data.facturado,
+              label: 'Monto Conciliado',
+              data: data.conciliado,
               borderColor: '#28a745',
               backgroundColor: 'rgba(40, 167, 69, 0.1)',
               tension: 0.3,
               fill: true,
             },
             {
-              label: 'Pendiente',
-              data: data.pendiente,
-              borderColor: '#ffc107',
-              backgroundColor: 'rgba(255, 193, 7, 0.15)',
+              label: 'Monto Reportado',
+              data: data.reportado,
+              borderColor: '#17a2b8',
+              backgroundColor: 'rgba(23, 162, 184, 0.15)',
               tension: 0.3,
               fill: true,
             },

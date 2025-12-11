@@ -1,4 +1,4 @@
-@php($title = 'Extractos cargados')
+@php($title = 'Reporte de extractos')
 
 @extends('exports.layout')
 

@@ -20,11 +20,13 @@ class ExecutiveDashboardBuilder
         $conciliatedStates = ['conciliado', 'demasia'];
 
         $totals = [
-            'facturado_hoy' => (float) SalesBookEntry::whereDate('invoice_date', $today)
-                ->whereIn('state_label', $conciliatedStates)
-                ->sum('amount'),
-            'operaciones_facturadas' => SalesBookEntry::whereIn('state_label', $conciliatedStates)->count(),
-            'operaciones_sin_factura' => SalesBookEntry::whereNotIn('state_label', $conciliatedStates)->count(),
+            'conciliado_hoy' => Transaction::whereDate('matched_at', $today)
+                ->where('status', 'conciliado')
+                ->with('salesEntry')
+                ->get()
+                ->sum(fn ($t) => $t->salesEntry?->amount ?? 0),
+            'conciliaciones_total' => Transaction::where('status', 'conciliado')->count(),
+            'pagos_demasia' => Transaction::where('status', 'demasia')->count(),
             'alertas' => Transaction::whereNotNull('difference_amount')
                 ->where('difference_amount', '!=', 0)
                 ->count(),
@@ -72,27 +74,29 @@ class ExecutiveDashboardBuilder
     {
         $start = Carbon::today()->subDays($days - 1);
         $labels = [];
-        $seriesFacturado = [];
-        $seriesPendiente = [];
-        $conciliatedStates = ['conciliado', 'demasia'];
+        $seriesConciliado = [];
+        $seriesReportado = []; // Compare reconciled vs total reported in sales book
 
         for ($i = 0; $i < $days; $i++) {
             $date = (clone $start)->addDays($i);
             $labels[] = $date->format('d/m');
 
-            $seriesFacturado[] = (float) SalesBookEntry::whereDate('invoice_date', $date)
-                ->whereIn('state_label', $conciliatedStates)
-                ->sum('amount');
+            // Amount reconciled on this day (matched_at)
+            $seriesConciliado[] = Transaction::whereDate('matched_at', $date)
+                ->where('status', 'conciliado')
+                ->get()
+                ->sum(fn ($t) => $t->salesEntry?->amount ?? 0);
 
-            $seriesPendiente[] = (float) SalesBookEntry::whereDate('invoice_date', $date)
-                ->whereNotIn('state_label', $conciliatedStates)
+            // Amount reported in sales book for this day (invoice_date)
+            // This clearly compares "What we processed" vs "What came in from sales"
+            $seriesReportado[] = (float) SalesBookEntry::whereDate('invoice_date', $date)
                 ->sum('amount');
         }
 
         return [
             'labels' => $labels,
-            'facturado' => $seriesFacturado,
-            'pendiente' => $seriesPendiente,
+            'conciliado' => $seriesConciliado,
+            'reportado' => $seriesReportado,
         ];
     }
 
