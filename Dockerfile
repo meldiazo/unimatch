@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     libzip-dev \
     && docker-php-ext-install pdo pdo_pgsql zip
+    
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
 
 # Instalar composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
