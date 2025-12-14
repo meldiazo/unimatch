@@ -30,7 +30,7 @@ Aquí se debe modificar **lo mínimo necesario**.
 Por último, deben verificar que se este usando el mismo nombre del proyecto este archivo y en el `docker-compose.yml`, siguiendo este formato:
 
 ```
-[unimatch]-laravel
+[NombreDelProyecto]-laravel
 ```
 
 Mas detalles esta en el Docker.md, para probarlo local y otras cosas como variables de entorno
